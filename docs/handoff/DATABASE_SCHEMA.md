@@ -135,7 +135,19 @@ Indexes: `hc_pa0000_pernr_idx (pernr)`, `hc_pa0000_massn_idx (massn)`. Multiple 
 
 `pernr text NOT NULL`, `abkrs text`, `fpper text` (period `YYYYMM`), `srtza text`. Index `hc_hrpy_rgdir_fpper_idx (fpper)`.
 
-### 3.8 Primary keys, foreign keys, constraints (complete list)
+### 3.8 `hcm_t582a`: copy of SAP `T582A` (migration 003)
+
+`infty text NOT NULL`. Index `hcm_t582a_infty_idx (infty)`. Required: `infty`. Holds infotype definitions.
+
+### 3.9 `hcm_t591a`: copy of SAP `T591A` (migration 003)
+
+`infty text NOT NULL`, `subty text`. Index `hcm_t591a_infty_idx (infty)`. Required: `infty`. Holds subtype definitions per infotype.
+
+### 3.10 `hcm_t582s`: copy of SAP `T582S` (migration 003)
+
+`sprsl text`, `infty text NOT NULL`, `itext text`. Index `hcm_t582s_infty_sprsl_idx (infty, sprsl)`. Required: `infty`. Holds infotype texts in multiple languages (filtered by `sprsl = 'EN'`).
+
+### 3.11 Primary keys, foreign keys, constraints (complete list)
 
 - PKs: `sync_runs.id`, `schema_migrations.name`. Staging tables have **no PK** (SAP infotype tables legitimately repeat PERNR).
 - FKs: none. CHECK: `sync_runs_status_check`. NOT NULL: `*.pernr` in `hc_pa0000/hc_pa0001/hc_hrpy_rgdir`, `sync_runs.module/status/started_at`.
@@ -147,6 +159,7 @@ Indexes: `hc_pa0000_pernr_idx (pernr)`, `hc_pa0000_massn_idx (massn)`. Multiple 
 |---|---|
 | `src/db/migrations/001_init.sql` | `sync_runs` + index; staging tables `hc_pa0000`, `hc_pa0001`, `hc_t500p` (with `werks`), `hc_t001`, `hc_hrpy_rgdir` + indexes; view `hc_employee_current` (joining T500P on `werks`) |
 | `src/db/migrations/002_t500p_persa.sql` | Owner correction: `ALTER TABLE hc_t500p RENAME COLUMN werks TO persa`; `ALTER INDEX hc_t500p_werks_idx RENAME TO hc_t500p_persa_idx`; `CREATE OR REPLACE VIEW hc_employee_current` joining `t5.persa = p1.werks` |
+| `src/db/migrations/003_hcm_core.sql` | HCM Core staging tables: `hcm_t582a`, `hcm_t591a`, `hcm_t582s` + indexes |
 
 Runner (`src/db/migrate.js`): ensures the database exists (on error `3D000` connects to `PG_ADMIN_DATABASE` and runs `CREATE DATABASE`), creates `schema_migrations`, then applies every
 not-yet-applied `*.sql` in filename order, **each in its own transaction**, recording it. Runs automatically on `npm start`; manually via `npm run db:setup`.
@@ -224,6 +237,35 @@ WITH hires AS (SELECT DISTINCT pernr, EXTRACT(YEAR FROM begda)::int AS year
 SELECT h.year, e.land1 AS code, COUNT(*)::int AS hires
   FROM hires h LEFT JOIN hc_employee_current e ON e.pernr = h.pernr
  GROUP BY h.year, e.land1 ORDER BY h.year;
+
+-- ---------------------------------------------------------------------------
+-- HCM Core module queries (src/modules/hcm_core/hcm_core.repository.js)
+-- ---------------------------------------------------------------------------
+
+-- distinct infotypes from T582A
+SELECT DISTINCT infty FROM hcm_t582a WHERE infty IS NOT NULL ORDER BY infty;
+
+-- subtype count per infotype from T591A
+SELECT infty, COUNT(DISTINCT subty)::int AS subtype_count
+  FROM hcm_t591a
+ WHERE infty IS NOT NULL AND subty IS NOT NULL
+ GROUP BY infty
+ ORDER BY infty;
+
+-- infotype + subtype table with English text from T582S
+WITH subtypes AS (
+  SELECT DISTINCT infty, subty FROM hcm_t591a WHERE infty IS NOT NULL
+),
+texts AS (
+  SELECT DISTINCT ON (infty) infty, itext
+    FROM hcm_t582s
+   WHERE sprsl = 'EN' AND infty IS NOT NULL
+   ORDER BY infty, itext
+)
+SELECT s.infty, s.subty, t.itext
+  FROM subtypes s
+  LEFT JOIN texts t ON t.infty = s.infty
+ ORDER BY s.infty, s.subty;
 ```
 
 Known SQL gotchas: the `ILIKE $4 || '%'` search does not escape `%`/`_` typed by the user; PERNR in SAP data is zero-padded (a prefix search needs the leading zeros).

@@ -59,7 +59,23 @@ These are the owner's requirements, preserved as faithfully as possible. Status 
 7. **"Fetched fresh the first time the application is opened"** was implemented as: the first KPI read after a *server start* (or the frontend
    calling `POST /api/headcount/sync` on load) fetches live from SAP; later reads come from PostgreSQL until a forced refresh.
 
-## 4. Main features and capabilities
+## 4. Functional requirements (KPI section 2: HCM Core)
+
+### 4.1 Required source data
+| Purpose | SAP table | Fields read |
+|---|---|---|
+| Infotype definitions | `T582A` | `INFTY` |
+| Subtypes | `T591A` | `INFTY`, `SUBTY` |
+| Infotype texts | `T582S` | `SPRSL`, `INFTY`, `ITEXT` |
+
+### 4.2 Required calculations
+| # | Requirement | Implementation | Endpoint | Status |
+|---|---|---|---|---|
+| 1 | Deduplicate `INFTY` from `T582A`, categorize into 0000–0999 (PA), 1000–1999 (OM), 2000–2999 (TM), 3000–3999 (SAP reserved), 4000–4999 (Recruitment), 5000–5999 (E-Recruiting & Learning), 9000–9999 (Custom). Return count of infotypes per category. | Distinct `INFTY` from `hcm_t582a`; categorized in Node processor; ranges with 0 are preserved with 0 | `GET /api/hcm-core/infotype-categories` | IMPLEMENTED, VERIFIED (mock) |
+| 2 | Distinct `(INFTY, SUBTY)` from `T591A`. Count number of subtypes under each infotype. Output: infotype with its count of subtypes (and its functional category). | `GROUP BY infty`, `COUNT(DISTINCT subty)` on `hcm_t591a` where `subty IS NOT NULL` | `GET /api/hcm-core/subtypes-per-infotype` | IMPLEMENTED, VERIFIED (mock) |
+| 3 | Table with columns: infotype, subtype, category (PA, OM, TM, etc.), and infotype text from `T582S` (filtered for `SPRSL = 'EN'`). | Distinct subtypes joined to `T582S` on `infty` filtered for `SPRSL = 'EN'` | `GET /api/hcm-core/infotype-detail` | IMPLEMENTED, VERIFIED (mock) |
+
+## 5. Main features and capabilities
 
 - Per-KPI-section module structure (routes → controller → service → repository → processor), staging tables per section.
 - SAP access via a custom MCP client: HS256 JWT carrying SAP credentials, JSON-RPC `tools/call`, JSON or SSE responses, paging with `rowCount`/`rowSkips`, tolerant row parsing.

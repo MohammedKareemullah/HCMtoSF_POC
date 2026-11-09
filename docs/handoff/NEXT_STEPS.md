@@ -2,8 +2,7 @@
 
 ## 1. Where work stopped
 
-**Last feature worked on:** correcting the country logic: T500P key `PERSA` instead of `WERKS` (fetch, staging column, view, hires-by-country) and replacing the ICU country names with the owner-supplied SAP country list.
-Delivered to the owner on 2026-11-08 as `sap-kpi-backend-patch.zip` (14 files). It is applied in this repo; 20/20 tests pass; an existing database upgrades cleanly via migration 002.
+**Last feature worked on:** implemented the second KPI section **hcm_core** (infotype category summary from T582A, subtype counts per infotype from T591A, infotype/subtype detail table with English text from T582S). Added migration `003_hcm_core.sql`, mock data in `mock/mockData.js`, unit tests in `tests/unit.test.js`, and e2e test in `tests/hcm_core.e2e.test.js`.
 
 After that, the owner asked only for this handoff documentation. There is **no half-written code**: nothing is in progress in the source tree.
 

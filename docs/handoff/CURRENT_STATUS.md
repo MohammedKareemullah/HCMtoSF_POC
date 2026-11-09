@@ -18,6 +18,9 @@ Status date: 2026-11-08. Legend: **VERIFIED (mock)** = covered by the automated 
 | KPI 4: employee table with status text, country, company, group, subgroup; filters + pagination + validation | e2e |
 | KPI 5: distinct employees in payroll per `FPPER` present | e2e |
 | KPI 6: hires per year and per year × country | e2e |
+| HCM Core KPI 1: infotype category counts (distinct INFTY from T582A categorized into PA, OM, TM, SAP Reserved, Recruitment, E-Recruiting & Learning, Custom) | unit + e2e |
+| HCM Core KPI 2: number of subtypes per infotype (distinct SUBTY from T591A) | unit + e2e |
+| HCM Core KPI 3: infotype/subtype flat detail table with category and English text from T582S (SPRSL='EN') | unit + e2e |
 | `/overview` aggregate, `/sync`, `/sync/status` | e2e |
 | Mock MCP server + synthetic dataset; `inspect:table` diagnostic | used by tests / scripts |
 
@@ -45,7 +48,7 @@ Test totals: **20 pass / 0 fail** (12 e2e, 8 unit) on Node 22, PostgreSQL 16.
 
 - **Authentication/authorization for the API** (CORS defaults to `*`; HR data at PERNR level is exposed).
 - Frontend (out of scope by the owner's choice).
-- KPI sections other than headcount (owner will supply them).
+- KPI sections other than headcount and hcm_core (owner will supply any further ones).
 - "Interns, etc." breakdown (owner's wording in requirement 1; not mappable to STAT2).
 - Scheduled/background refresh, incremental sync, server-side filtering, history/trends of staging data.
 - Request logging/IDs, metrics, structured logger, rate limiting, security headers.

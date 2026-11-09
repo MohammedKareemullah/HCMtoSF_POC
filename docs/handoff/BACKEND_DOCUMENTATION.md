@@ -22,7 +22,8 @@ sap-kpi-backend/
 │   ├── integrations/mcp/            mcpClient.js, sapTools.js, sapTableReader.js
 │   ├── modules/
 │   │   ├── index.js                 registerModules(app): one line per KPI section
-│   │   └── headcount/               the only KPI section so far (see 3)
+│   │   ├── headcount/               headcount KPI section (see 3.1)
+│   │   └── hcm_core/                HCM core infotype metadata KPI section (see 3.2)
 │   └── shared/
 │       ├── data/countryNames.js     generated: 229 country codes → SAP names
 │       ├── db/bulkInsert.js         unnest-based multi-row insert
@@ -40,7 +41,9 @@ Size: about 2.3 k lines of JS/SQL including tests and mocks.
 `Express app` → `cors` → `express.json()` → `/health` or `/api/headcount/*` router → (for KPI reads) `ensureFresh` middleware → `asyncHandler(handler)` → service → repository/processor → `res.json({data, meta})`.
 Unmatched → `notFound` (404). Any thrown/rejected error → `errorHandler`.
 
-## 3. Modules and responsibilities (`src/modules/headcount/`)
+## 3. Modules and responsibilities
+
+### 3.1 Headcount module (`src/modules/headcount/`)
 
 | File | Responsibility |
 |---|---|
@@ -51,7 +54,20 @@ Unmatched → `notFound` (404). Any thrown/rejected error → `errorHandler`.
 | `headcount.processor.js` | Pure shaping: status labels, country names (re-exports `countryName`), summaries with totals/sorting, employee DTO, payroll period parsing, hires structures |
 | `headcount.service.js` | `syncHeadcount()` (start run → fetch → load → finish/fail), `coordinator` (SyncCoordinator singleton), `getSyncStatus()`, KPI getters, `getOverview()` |
 | `headcount.controller.js` | `ensureFresh` middleware, handlers, query validation (`parseIntParam`), response envelope helper |
-| `headcount.routes.js` | Route table (below) |
+| `headcount.routes.js` | Route table for `/api/headcount/*` |
+
+### 3.2 HCM Core module (`src/modules/hcm_core/`)
+
+| File | Responsibility |
+|---|---|
+| `hcm_core.constants.js` | `MODULE_NAME="hcm_core"`; `INFOTYPE_CATEGORIES` ranges and `categoriseInfotype()`; `getSourceTables()` for T582A, T591A, T582S |
+| `hcm_core.fetcher.js` | `fetchHcmCoreSource()`: reads `T582A`, `T591A`, `T582S` via `readSapTable` with `mapLimit` concurrency; returns raw records |
+| `hcm_core.loader.js` | `replaceStaging(source)`: one transaction: `TRUNCATE`, convert values (`text`), `bulkInsert` into `hcm_t582a`, `hcm_t591a`, `hcm_t582s` |
+| `hcm_core.repository.js` | All SQL for HCM Core: distinct infotypes, subtype counts grouped by infotype, joined infotype/subtype text query |
+| `hcm_core.processor.js` | Pure shaping: infotype counts grouped by functional category, subtype counts per infotype with category, flat infotype-subtype detail table |
+| `hcm_core.service.js` | `syncHcmCore()`, `coordinator` (SyncCoordinator singleton), `getSyncStatus()`, KPI getters |
+| `hcm_core.controller.js` | `ensureFresh` middleware, handlers, response envelope helper |
+| `hcm_core.routes.js` | Route table for `/api/hcm-core/*` |
 
 Shared code: `src/shared/sync/syncCoordinator.js` (freshness logic, see SYSTEM_ARCHITECTURE.md section 6), `syncRuns.repository.js` (insert/update/read `sync_runs`, `failInterruptedRuns`),
 `src/shared/utils/countryName.js` (SAP list → ICU `Intl.DisplayNames` fallback → raw code; empty → "Unknown"), `sapValues.js` (`cleanText`, `sapDate`, `convertValue`), `concurrency.js` (`mapLimit`),
@@ -138,7 +154,74 @@ Only months present in `HRPY_RGDIR` appear (gaps are not filled). Non-`YYYYMM` p
     "hireActionCodes": ["01"] }, "meta": {...} }
 ```
 
-### 4.7 Errors
+### 4.7 HCM Core endpoints (`/api/hcm-core`)
+
+| Method | Path | Purpose |
+|---|---|---|
+| POST | `/api/hcm-core/sync` | Force a sync of T582A, T591A, T582S from SAP now |
+| GET | `/api/hcm-core/sync/status` | HCM Core sync status |
+| GET | `/api/hcm-core/infotype-categories` | Distinct infotypes from T582A categorized by SAP functional area |
+| GET | `/api/hcm-core/subtypes-per-infotype` | Number of distinct subtypes per infotype from T591A |
+| GET | `/api/hcm-core/infotype-detail` | Flat table of infotype, subtype, functional category, and English infotype text from T582S |
+
+#### `GET /api/hcm-core/infotype-categories`
+Sample response:
+```json
+{
+  "data": {
+    "total": 9,
+    "items": [
+      { "category": "Personnel Administration (PA)", "range": "0000–0999", "infotypeCount": 5 },
+      { "category": "Organizational Management (OM)", "range": "1000–1999", "infotypeCount": 2 },
+      { "category": "Time Management (TM)", "range": "2000–2999", "infotypeCount": 1 },
+      { "category": "SAP Reserved", "range": "3000–3999", "infotypeCount": 0 },
+      { "category": "Recruitment", "range": "4000–4999", "infotypeCount": 0 },
+      { "category": "E-Recruiting & Learning", "range": "5000–5999", "infotypeCount": 0 },
+      { "category": "Custom Infotypes", "range": "9000–9999", "infotypeCount": 1 }
+    ]
+  },
+  "meta": { "lastSyncedAt": "2026-11-09T12:00:00.000Z", "stale": false }
+}
+```
+
+#### `GET /api/hcm-core/subtypes-per-infotype`
+Sample response:
+```json
+{
+  "data": {
+    "total": 6,
+    "totalSubtypes": 10,
+    "items": [
+      { "infotype": "0000", "category": "Personnel Administration (PA)", "subtypeCount": 1 },
+      { "infotype": "0001", "category": "Personnel Administration (PA)", "subtypeCount": 2 },
+      { "infotype": "0007", "category": "Personnel Administration (PA)", "subtypeCount": 3 },
+      { "infotype": "0008", "category": "Personnel Administration (PA)", "subtypeCount": 1 },
+      { "infotype": "1000", "category": "Organizational Management (OM)", "subtypeCount": 2 },
+      { "infotype": "9000", "category": "Custom Infotypes", "subtypeCount": 1 }
+    ]
+  },
+  "meta": { "lastSyncedAt": "2026-11-09T12:00:00.000Z", "stale": false }
+}
+```
+
+#### `GET /api/hcm-core/infotype-detail`
+Sample response:
+```json
+{
+  "data": {
+    "total": 10,
+    "items": [
+      { "infotype": "0000", "subtype": "Z1", "category": "Personnel Administration (PA)", "infotypeText": "Actions" },
+      { "infotype": "0001", "subtype": "01", "category": "Personnel Administration (PA)", "infotypeText": "Organizational Assignment" },
+      { "infotype": "0001", "subtype": "02", "category": "Personnel Administration (PA)", "infotypeText": "Organizational Assignment" },
+      { "infotype": "0008", "subtype": "01", "category": "Personnel Administration (PA)", "infotypeText": null }
+    ]
+  },
+  "meta": { "lastSyncedAt": "2026-11-09T12:00:00.000Z", "stale": false }
+}
+```
+
+### 4.8 Errors
 
 `{ "error": { "code": "<CODE>", "message": "...", "details"?: ... } }`
 

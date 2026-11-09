@@ -3,7 +3,9 @@
 Node + Express + PostgreSQL backend. Data is pulled from SAP through the Hypercare MCP server,
 staged in Postgres, processed per KPI section, and exposed as JSON APIs for the frontend.
 
-First KPI section implemented: **headcount** (status, country, company code, employee table, payroll per month, hires per year).
+KPI sections implemented:
+- **headcount** – employment status, country, company code, employee table, payroll per month, hires per year.
+- **hcm_core** – infotype catalogue: category breakdown, subtype counts per infotype, full infotype/subtype detail table.
 
 ## Run it
 
@@ -45,6 +47,14 @@ src/
       headcount.processor.js   pure: labels, country names, response shapes
       headcount.service.js     orchestration: sync + KPI reads
       headcount.controller.js / headcount.routes.js
+    hcm_core/
+      hcm_core.constants.js    SAP tables/fields, infotype category ranges, categoriseInfotype()
+      hcm_core.fetcher.js      SAP -> raw records (T582A, T591A, T582S)
+      hcm_core.loader.js       raw records -> Postgres staging tables (one transaction)
+      hcm_core.repository.js   SQL: distinct infotypes, subtype counts, infotype/subtype text join
+      hcm_core.processor.js    pure: category aggregation, subtype totals, detail shaping
+      hcm_core.service.js      orchestration: sync + KPI reads
+      hcm_core.controller.js / hcm_core.routes.js
 mock/                          fake MCP server + dataset
 tests/                         unit + end-to-end tests
 ```
@@ -84,10 +94,16 @@ All GETs return `{ data, meta: { lastSyncedAt, stale, warning? } }`.
 | GET | `/api/headcount/employees` | Employee table; query: `status`, `country`, `companyCode`, `search` (PERNR prefix), `page`, `pageSize` (max 500). Use `UNKNOWN` for country/companyCode to find unmapped employees |
 | GET | `/api/headcount/payroll-by-month` | Distinct employees in payroll per FPPER present in HRPY_RGDIR |
 | GET | `/api/headcount/hires-per-year` | `byYear` (year, hires) and `byCountry` (year, country, hires) |
+| POST | `/api/hcm-core/sync` | Fetch HCM Core tables (T582A, T591A, T582S) from SAP now |
+| GET | `/api/hcm-core/sync/status` | Syncing flag, last success, latest run for HCM Core |
+| GET | `/api/hcm-core/infotype-categories` | Count of infotypes per category (PA, OM, TM, SAP Reserved, Recruitment, E-Recruiting & Learning, Custom Infotypes) |
+| GET | `/api/hcm-core/subtypes-per-infotype` | Number of distinct subtypes under each infotype |
+| GET | `/api/hcm-core/infotype-detail` | Flat table of infotype, subtype, functional category, and English infotype text (T582S with SPRSL='EN') |
 | GET | `/health` | DB ping |
 
 ## Business rules (and the choices behind them)
 
+### Headcount
 1. **One row per employee:** PA0000 and PA0001 can hold several records per PERNR (history). The current record is the one with the
    latest ENDDA, then latest BEGDA. For that, `BEGDA`/`ENDDA` are read in addition to the fields you listed.
 2. **PA0001 never adds employees:** it is joined onto PA0000's PERNRs only. Employees without a PA0001 row, or whose plant/company
@@ -100,6 +116,19 @@ All GETs return `{ data, meta: { lastSyncedAt, stale, warning? } }`.
    shown as codes (`PERSG`/`PERSK`); names would need T501T/T503T.
 6. **T500P key:** you specified `WERKS`; in standard SAP the personnel-area key of T500P is `PERSA`. If the read fails with a field-not-found
    error, set `T500P_WERKS_FIELD=PERSA`.
+
+### HCM Core
+1. **Infotype categorization (T582A):** Distinct INFTY values from T582A are categorized into:
+   - `0000 – 0999`: Personnel Administration (PA)
+   - `1000 – 1999`: Organizational Management (OM)
+   - `2000 – 2999`: Time Management (TM)
+   - `3000 – 3999`: SAP Reserved
+   - `4000 – 4999`: Recruitment
+   - `5000 – 5999`: E-Recruiting & Learning
+   - `9000 – 9999`: Custom Infotypes
+   - Categories with 0 infotypes are still listed with `infotypeCount: 0`. Any value outside these ranges is categorized as `Unknown`.
+2. **Subtypes per infotype (T591A):** Distinct `SUBTY` values are counted per `INFTY`. Non-null subtypes only. Infotypes with no subtype entries in T591A are omitted.
+3. **Infotype detail table (T591A + T582S):** Lists all distinct `(INFTY, SUBTY)` pairs with their category and the English description `ITEXT` from T582S (`SPRSL = 'EN'`). If no English text exists for an infotype, `infotypeText` is `null`.
 
 ## Notes
 

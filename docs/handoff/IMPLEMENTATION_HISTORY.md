@@ -65,6 +65,13 @@ The turn-5 patch touched: `README.md`, `.env.example`, `src/config/env.js`, `src
 4. Turn 4 country names unspecified ("fill in country name from country code") → turn 5: **use the supplied country-code list**.
 5. Turn 4 hires "per year" with output "year and number of hires" while also saying "by country" → implemented **both** (`byYear` and `byCountry`).
 6. Turn 5: delivery style changed to **patches only**.
+7. Turn 6: implemented KPI section 2 (**HCM Core**):
+   - Deduplicated infotypes from `T582A` categorized by functional area (0000–0999 PA, 1000–1999 OM, 2000–2999 TM, 3000–3999 SAP reserved, 4000–4999 Recruitment, 5000–5999 E-Recruiting & Learning, 9000–9999 Custom infotypes).
+   - Distinct subtypes from `T591A` counted per infotype.
+   - Infotype-subtype table with category and English infotype text from `T582S` (`SPRSL = 'EN'`).
+   - Append-only migration `003_hcm_core.sql` creating `hcm_t582a`, `hcm_t591a`, `hcm_t582s`.
+   - Registered under `/api/hcm-core` in `src/modules/index.js`.
+   - Synthetic data in `mock/mockData.js`, unit tests in `tests/unit.test.js`, e2e test in `tests/hcm_core.e2e.test.js`.
 
 ## 5. Bugs, errors and issues encountered, and resolutions
 

@@ -69,4 +69,63 @@ const hrpy = [
   [1001, "U1", "202406", "A"], [1006, "D1", "202406", "A"], [1007, "G1", "202406", "A"],
 ].map(([n, ABKRS, FPPER, SRTZA]) => ({ PERNR: p(n), ABKRS, FPPER, SRTZA }));
 
-export const MOCK_TABLES = { PA0000: pa0000, PA0001: pa0001, T500P: t500p, T001: t001, HRPY_RGDIR: hrpy };
+// ---------------------------------------------------------------------------
+// HCM Core: T777D, T591A, T582S synthetic data
+//
+// Infotypes in mock (all distinct INFTY from T777D):
+//   PA range  (0000-0999): 0000, 0001, 0002, 0007, 0008  -> 5 infotypes
+//   OM range  (1000-1999): 1000, 1001                    -> 2 infotypes
+//   TM range  (2000-2999): 2001                          -> 1 infotype
+//   Custom    (9000-9999): 9000                          -> 1 infotype
+//   Total distinct infotypes: 9
+//
+// 0001 has duplicate row in T777D to verify dedup works (should still count as 1).
+// ---------------------------------------------------------------------------
+
+// T777D: INFTY only (intentional duplicate for dedup test)
+const t777d = [
+  { INFTY: "0000" }, { INFTY: "0001" }, { INFTY: "0001" }, // duplicate 0001
+  { INFTY: "0002" }, { INFTY: "0007" }, { INFTY: "0008" },
+  { INFTY: "1000" }, { INFTY: "1001" },
+  { INFTY: "2001" },
+  { INFTY: "9000" },
+];
+
+// T591A: INFTY + SUBTY (subtypes per infotype)
+// Subtype counts (distinct per INFTY):
+//   0000 -> 1 (Z1)
+//   0001 -> 2 (01, 02)   -- has duplicate (01) to verify dedup
+//   0002 -> 0  (no rows in T591A)
+//   0007 -> 3 (01, 02, 03)
+//   0008 -> 1 (01)
+//   1000 -> 2 (A, B)
+//   9000 -> 1 (C1)
+const t591a = [
+  { INFTY: "0000", SUBTY: "Z1" },
+  { INFTY: "0001", SUBTY: "01" }, { INFTY: "0001", SUBTY: "01" }, // duplicate subtype
+  { INFTY: "0001", SUBTY: "02" },
+  { INFTY: "0007", SUBTY: "01" }, { INFTY: "0007", SUBTY: "02" }, { INFTY: "0007", SUBTY: "03" },
+  { INFTY: "0008", SUBTY: "01" },
+  { INFTY: "1000", SUBTY: "A" },  { INFTY: "1000", SUBTY: "B" },
+  { INFTY: "9000", SUBTY: "C1" },
+];
+
+// T582S: SPRSL, INFTY, ITEXT (English 'E' + German 'D' rows; only E should surface)
+const t582s = [
+  { SPRSL: "E", INFTY: "0000", ITEXT: "Actions" },
+  { SPRSL: "D", INFTY: "0000", ITEXT: "Massnahmen" },
+  { SPRSL: "E", INFTY: "0001", ITEXT: "Organizational Assignment" },
+  { SPRSL: "E", INFTY: "0002", ITEXT: "Personal Data" },
+  { SPRSL: "E", INFTY: "0007", ITEXT: "Planned Working Time" },
+  // 0008 intentionally has no E text to verify null handling
+  { SPRSL: "D", INFTY: "0008", ITEXT: "Basisbezuege" },
+  { SPRSL: "E", INFTY: "1000", ITEXT: "Object" },
+  { SPRSL: "E", INFTY: "1001", ITEXT: "Relationships" },
+  { SPRSL: "E", INFTY: "2001", ITEXT: "Absences" },
+  { SPRSL: "E", INFTY: "9000", ITEXT: "Custom Infotype 9000" },
+];
+
+export const MOCK_TABLES = {
+  PA0000: pa0000, PA0001: pa0001, T500P: t500p, T001: t001, HRPY_RGDIR: hrpy,
+  T582A: t777d, T777D: t777d, T591A: t591a, T582S: t582s,
+};

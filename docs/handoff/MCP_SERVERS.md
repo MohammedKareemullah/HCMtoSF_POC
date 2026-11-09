@@ -139,6 +139,14 @@ Unit tests cover each accepted shape and the failures (`tests/unit.test.js`).
 | `T001` | `BUKRS, BUTXT` | `hc_t001` |
 | `HRPY_RGDIR` | `PERNR, ABKRS, FPPER, SRTZA` | `hc_hrpy_rgdir` |
 
+### 4.6 Tables and fields requested by the HCM Core module (`hcm_core.constants.js`)
+
+| SAP table | Fields requested (in order) | Staging table |
+|---|---|---|
+| `T582A` | `INFTY` | `hcm_t582a` |
+| `T591A` | `INFTY, SUBTY` | `hcm_t591a` |
+| `T582S` | `SPRSL, INFTY, ITEXT` | `hcm_t582s` |
+
 Tables are fetched with concurrency `SAP_FETCH_CONCURRENCY` (default 2); each table is read fully into memory before loading.
 
 ---
