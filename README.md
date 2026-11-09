@@ -1,0 +1,110 @@
+# SAP KPI Backend
+
+Node + Express + PostgreSQL backend. Data is pulled from SAP through the Hypercare MCP server,
+staged in Postgres, processed per KPI section, and exposed as JSON APIs for the frontend.
+
+First KPI section implemented: **headcount** (status, country, company code, employee table, payroll per month, hires per year).
+
+## Run it
+
+```bash
+npm install
+cp .env.example .env.local   # or merge the new keys into your existing .env
+npm run db:setup             # creates the database if missing + applies migrations (optional, `npm start` does it too)
+npm start                    # http://localhost:4000
+```
+
+Your existing `.env` keys (`MCP_URL`, `MCP_JWT_SECRET`, `SAP_*`) are used as they are.
+New keys are listed in `.env.example` (mainly `DATABASE_URL`).
+
+Before the first real run, check what your MCP server returns for `sap_table_read`:
+
+```bash
+npm run inspect:table -- PA0000 PERNR,STAT2 5
+```
+
+No SAP at hand? `npm run mock:mcp` starts a fake MCP server on :8000 (secret `mock-secret`) with a small dataset.
+Tests: `npm test` (needs Postgres; set `TEST_DATABASE_URL` if yours differs from `postgres://postgres:postgres@127.0.0.1:5432/hr_kpi_test`).
+
+## Structure
+
+```
+src/
+  server.js / app.js           start-up (migrate, listen) and express wiring
+  config/                      env.js (all env vars), db.js (pg pool, transactions)
+  db/                          migrate.js + migrations/*.sql
+  integrations/mcp/            mcpClient.js (JWT, JSON-RPC, SSE), sapTools.js, sapTableReader.js (paging + row parsing)
+  shared/                      errors, middleware, bulkInsert, sync (coordinator + sync_runs), utils
+  modules/
+    index.js                   registers each KPI module's routes
+    headcount/
+      headcount.constants.js   SAP tables/fields -> Postgres columns, STAT2 labels
+      headcount.fetcher.js     SAP -> raw records (via MCP)
+      headcount.loader.js      raw records -> Postgres staging tables (one transaction)
+      headcount.repository.js  SQL: filters, joins, aggregations
+      headcount.processor.js   pure: labels, country names, response shapes
+      headcount.service.js     orchestration: sync + KPI reads
+      headcount.controller.js / headcount.routes.js
+mock/                          fake MCP server + dataset
+tests/                         unit + end-to-end tests
+```
+
+Adding a KPI section = a new folder under `modules/` with the same files, its own `<prefix>_*` staging tables
+in a new migration (`002_*.sql`), and one line in `modules/index.js`.
+
+## How data flows
+
+```
+SAP --MCP sap_table_read (paged)--> fetcher --> loader --> Postgres staging tables (hc_*)
+                                                                  |
+                    frontend <-- controller <-- processor <-- repository (SQL on view hc_employee_current)
+```
+
+- **Fresh on app open:** the frontend calls `POST /api/headcount/sync` once when it loads and waits for it.
+  If it skips that, the first KPI `GET` after a server start triggers the same fetch.
+  Later reads come from Postgres. `?refresh=true` on any GET forces a new fetch.
+- Concurrent callers share one SAP fetch.
+- All five tables are read first, then swapped into Postgres in **one transaction**; a failed sync never leaves half-loaded data.
+- If SAP is unreachable but an earlier sync exists, GETs serve that data with `meta.stale = true` and a `meta.warning`
+  (SAP is not retried for `SYNC_RETRY_COOLDOWN_MS`). `POST /sync` returns 502.
+- Every attempt is logged in `sync_runs` (status, duration, rows per table, error).
+
+## API
+
+All GETs return `{ data, meta: { lastSyncedAt, stale, warning? } }`.
+
+| Method | Path | Returns |
+|---|---|---|
+| POST | `/api/headcount/sync` | Fetch from SAP now; `{ runId, status, rowCounts, durationMs }` |
+| GET | `/api/headcount/sync/status` | Syncing flag, last success, latest run |
+| GET | `/api/headcount/overview` | Everything below except the employee table, in one call |
+| GET | `/api/headcount/status-summary` | Employees per STAT2: Active, Inactive, Retiree, Withdrawn (+ total) |
+| GET | `/api/headcount/by-country` | Employees per country (name from code) |
+| GET | `/api/headcount/by-company-code` | Employees per company code (with BUTXT) |
+| GET | `/api/headcount/employees` | Employee table; query: `status`, `country`, `companyCode`, `search` (PERNR prefix), `page`, `pageSize` (max 500). Use `UNKNOWN` for country/companyCode to find unmapped employees |
+| GET | `/api/headcount/payroll-by-month` | Distinct employees in payroll per FPPER present in HRPY_RGDIR |
+| GET | `/api/headcount/hires-per-year` | `byYear` (year, hires) and `byCountry` (year, country, hires) |
+| GET | `/health` | DB ping |
+
+## Business rules (and the choices behind them)
+
+1. **One row per employee:** PA0000 and PA0001 can hold several records per PERNR (history). The current record is the one with the
+   latest ENDDA, then latest BEGDA. For that, `BEGDA`/`ENDDA` are read in addition to the fields you listed.
+2. **PA0001 never adds employees:** it is joined onto PA0000's PERNRs only. Employees without a PA0001 row, or whose plant/company
+   has no match in T500P/T001, are counted under **Unknown** so the totals still add up to the PA0000 headcount.
+3. **Hires:** a PA0000 record whose `MASSN` is in `HIRE_MASSN_CODES` (default `01`, the standard "Hiring" action), counted by
+   year of `BEGDA`, as distinct PERNRs. Years with no hires do not appear. The country split uses each employee's current country.
+4. **Payroll:** distinct PERNR per `FPPER` for every period present. By default all rows count; set `PAYROLL_SRTZA_FILTER=A`
+   to count only current (non-superseded) results.
+5. **Country names** come from the ISO code via Node's `Intl.DisplayNames` (no extra SAP read). Employee group / subgroup are
+   shown as codes (`PERSG`/`PERSK`); names would need T501T/T503T.
+6. **T500P key:** you specified `WERKS`; in standard SAP the personnel-area key of T500P is `PERSA`. If the read fails with a field-not-found
+   error, set `T500P_WERKS_FIELD=PERSA`.
+
+## Notes
+
+- The MCP client signs an HS256 JWT with Node's `crypto`. For a self-signed `https://localhost` endpoint, run with
+  `NODE_TLS_REJECT_UNAUTHORIZED=0` in development only.
+- `sap_table_read` is paged with `rowCount` + `rowSkips` (`SAP_PAGE_SIZE`, default 5000). If your server ignores `rowSkips`, the reader
+  detects the repeated page and stops with a clear error; set `SAP_PAGE_SIZE` above the largest table's row count in that case.
+- The staging tables hold personal data (PA0000/PA0001 by PERNR). Restrict database access accordingly.
