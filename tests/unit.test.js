@@ -10,6 +10,22 @@ import {
   buildInfotypeSubtypeTable,
 } from "../src/modules/hcm_core/hcm_core.processor.js";
 import { categoriseInfotype } from "../src/modules/hcm_core/hcm_core.constants.js";
+import {
+  classifyScreen,
+  EDYNR_CATEGORIES,
+  LDYNR_CATEGORIES,
+  OPERA_LABELS,
+} from "../src/modules/pa/pa.constants.js";
+import {
+  buildSingleScreenClassification,
+  buildListScreenClassification,
+  buildModulePoolMapping,
+  buildFieldVisibilitySummary,
+  buildDynamicActionCount,
+  buildDynamicActionTriggers,
+  buildDynamicActionByOperation,
+  buildDynamicActionRoutines,
+} from "../src/modules/pa/pa.processor.js";
 
 test("sapDate converts SAP dates and rejects junk", () => {
   assert.equal(sapDate("20240229"), "2024-02-29");
@@ -183,4 +199,136 @@ test("buildInfotypeSubtypeTable attaches category and infotype text; NA for miss
 
   const r9000 = result.items.find((r) => r.infotype === "9000");
   assert.equal(r9000.category, "Custom Infotypes");
+});
+
+test("classifyScreen correctly identifies EDYNR and LDYNR screen types", () => {
+  // EDYNR
+  assert.equal(classifyScreen("2000", EDYNR_CATEGORIES), "Universal Standard");
+  assert.equal(classifyScreen("2001", EDYNR_CATEGORIES), "Country Specific");
+  assert.equal(classifyScreen("2500", EDYNR_CATEGORIES), "Country Specific");
+  assert.equal(classifyScreen("2899", EDYNR_CATEGORIES), "Country Specific");
+  assert.equal(classifyScreen("2900", EDYNR_CATEGORIES), "Fast Entry Screens");
+  assert.equal(classifyScreen("2999", EDYNR_CATEGORIES), "Fast Entry Screens");
+  assert.equal(classifyScreen("0100", EDYNR_CATEGORIES), "Custom");
+  assert.equal(classifyScreen("9500", EDYNR_CATEGORIES), "Custom");
+  assert.equal(classifyScreen("1500", EDYNR_CATEGORIES), "Others");
+  assert.equal(classifyScreen(null, EDYNR_CATEGORIES), "Others");
+
+  // LDYNR
+  assert.equal(classifyScreen("3000", LDYNR_CATEGORIES), "Universal Standard");
+  assert.equal(classifyScreen("3001", LDYNR_CATEGORIES), "Country Specific");
+  assert.equal(classifyScreen("3500", LDYNR_CATEGORIES), "Country Specific");
+  assert.equal(classifyScreen("3999", LDYNR_CATEGORIES), "Country Specific");
+  assert.equal(classifyScreen("0200", LDYNR_CATEGORIES), "Custom");
+  assert.equal(classifyScreen("9200", LDYNR_CATEGORIES), "Custom");
+  assert.equal(classifyScreen("2000", LDYNR_CATEGORIES), "Others");
+});
+
+test("buildSingleScreenClassification and buildListScreenClassification structure results correctly", () => {
+  const rows = [
+    { infty: "0001", edynr: "2000", ldynr: "3000" },
+    { infty: "0002", edynr: "2010", ldynr: "3100" },
+    { infty: "9000", edynr: "9100", ldynr: "9100" },
+  ];
+
+  const single = buildSingleScreenClassification(rows);
+  assert.equal(single.total, 3);
+  assert.equal(single.items.length, 3);
+  assert.equal(single.items[0].classification, "Universal Standard");
+  assert.equal(single.items[1].classification, "Country Specific");
+  assert.equal(single.items[2].classification, "Custom");
+
+  const list = buildListScreenClassification(rows);
+  assert.equal(list.total, 3);
+  assert.equal(list.items.length, 3);
+  assert.equal(list.items[0].classification, "Universal Standard");
+  assert.equal(list.items[1].classification, "Country Specific");
+  assert.equal(list.items[2].classification, "Custom");
+});
+
+test("buildModulePoolMapping formats infotype and modulePool output", () => {
+  const rows = [
+    { infty: "0001", module_pool: "MP000100" },
+    { infty: "0002", module_pool: "MP000200" },
+  ];
+  const result = buildModulePoolMapping(rows);
+  assert.equal(result.total, 2);
+  assert.deepEqual(result.items, [
+    { infotype: "0001", modulePool: "MP000100" },
+    { infotype: "0002", modulePool: "MP000200" },
+  ]);
+});
+
+test("buildFieldVisibilitySummary summarizes indicator symbol counts", () => {
+  const rows = [
+    { infty: "0001", hidden: 2, display_only: 2, required: 2, optional: 6 },
+    { infty: "0002", hidden: 1, display_only: 0, required: 1, optional: 0 },
+  ];
+  const result = buildFieldVisibilitySummary(rows);
+  assert.equal(result.total, 2);
+  assert.equal(result.items[0].hidden, 2);
+  assert.equal(result.items[0].displayOnly, 2);
+  assert.equal(result.items[0].required, 2);
+  assert.equal(result.items[0].optional, 6);
+});
+
+test("buildDynamicActionCount calculates total actions and items with dynamicActionSeqCount and dynamicCount", () => {
+  const rows = [
+    { infty: "0001", dynamic_action_seq_count: 5, dynamic_count: 3 },
+    { infty: "0002", dynamic_action_seq_count: 2, dynamic_count: 1 },
+  ];
+  const result = buildDynamicActionCount(rows);
+  assert.equal(result.total, 2);
+  assert.equal(result.totalActions, 7);
+  assert.deepEqual(result.items, [
+    { infotype: "0001", dynamicActionSeqCount: 5, dynamicCount: 3 },
+    { infotype: "0002", dynamicActionSeqCount: 2, dynamicCount: 1 },
+  ]);
+});
+
+test("buildDynamicActionTriggers outputs unique infotypes and list of unique target infotypes", () => {
+  const rows = [
+    { source_infotype: "0001", target_infotype: "0002" },
+    { source_infotype: "0001", target_infotype: "0002" }, // duplicate target
+    { source_infotype: "0001", target_infotype: "0007" },
+    { source_infotype: "0002", target_infotypes: ["0007"] },
+  ];
+  const result = buildDynamicActionTriggers(rows);
+  assert.equal(result.total, 2);
+  assert.deepEqual(result.items, [
+    { infotype: "0001", targetInfotypes: ["0002", "0007"] },
+    { infotype: "0002", targetInfotypes: ["0007"] },
+  ]);
+});
+
+test("buildDynamicActionByOperation maps OPERA descriptions, block counts, and seq counts", () => {
+  const rows = [
+    { opera: "04", dynamic_action_count: 1, dynamic_action_seq_count: 3 },
+    { opera: "02", dynamic_action_count: 1, dynamic_action_seq_count: 1 },
+  ];
+  const result = buildDynamicActionByOperation(rows);
+  assert.equal(result.total, 2);
+  assert.equal(result.items[0].description, "Create");
+  assert.equal(result.items[0].dynamicActionCount, 1);
+  assert.equal(result.items[0].dynamicActionSeqCount, 3);
+  assert.equal(result.items[1].description, "Change");
+  assert.equal(result.items[1].dynamicActionCount, 1);
+  assert.equal(result.items[1].dynamicActionSeqCount, 1);
+});
+
+test("buildDynamicActionRoutines formats routine names and counts", () => {
+  const rows = [
+    {
+      infty: "0001",
+      unique_routine_count: 2,
+      routine_names: "DATE_CHECK, MASSN_CHECK",
+      total_executions: 3,
+    },
+  ];
+  const result = buildDynamicActionRoutines(rows);
+  assert.equal(result.total, 1);
+  assert.equal(result.items[0].infotype, "0001");
+  assert.equal(result.items[0].uniqueRoutineCount, 2);
+  assert.equal(result.items[0].routineNames, "DATE_CHECK, MASSN_CHECK");
+  assert.equal(result.items[0].totalDynamicActions, 3);
 });

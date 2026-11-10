@@ -64,18 +64,40 @@ These are the owner's requirements, preserved as faithfully as possible. Status 
 ### 4.1 Required source data
 | Purpose | SAP table | Fields read |
 |---|---|---|
-| Infotype definitions | `T582A` | `INFTY` |
+| Infotype definitions | `T777D` | `INFTY` |
 | Subtypes | `T591A` | `INFTY`, `SUBTY` |
 | Infotype texts | `T582S` | `SPRSL`, `INFTY`, `ITEXT` |
 
 ### 4.2 Required calculations
 | # | Requirement | Implementation | Endpoint | Status |
 |---|---|---|---|---|
-| 1 | Deduplicate `INFTY` from `T582A`, categorize into 0000–0999 (PA), 1000–1999 (OM), 2000–2999 (TM), 3000–3999 (SAP reserved), 4000–4999 (Recruitment), 5000–5999 (E-Recruiting & Learning), 9000–9999 (Custom). Return count of infotypes per category. | Distinct `INFTY` from `hcm_t582a`; categorized in Node processor; ranges with 0 are preserved with 0 | `GET /api/hcm-core/infotype-categories` | IMPLEMENTED, VERIFIED (mock) |
+| 1 | Deduplicate `INFTY` from `T777D`, categorize into 0000–0999 (PA), 1000–1999 (OM), 2000–2999 (TM), 3000–3999 (SAP reserved), 4000–4999 (Recruitment), 5000–5999 (E-Recruiting & Learning), 9000–9999 (Custom). Return count of infotypes per category. | Distinct `INFTY` from `hcm_t777d`; categorized in Node processor; ranges with 0 are preserved with 0 | `GET /api/hcm-core/infotype-categories` | IMPLEMENTED, VERIFIED (mock) |
 | 2 | Distinct `(INFTY, SUBTY)` from `T591A`. Count number of subtypes under each infotype. Output: infotype with its count of subtypes (and its functional category). | `GROUP BY infty`, `COUNT(DISTINCT subty)` on `hcm_t591a` where `subty IS NOT NULL` | `GET /api/hcm-core/subtypes-per-infotype` | IMPLEMENTED, VERIFIED (mock) |
-| 3 | Table with columns: infotype, subtype, category (PA, OM, TM, etc.), and infotype text from `T582S` (filtered for `SPRSL = 'EN'`). | Distinct subtypes joined to `T582S` on `infty` filtered for `SPRSL = 'EN'` | `GET /api/hcm-core/infotype-detail` | IMPLEMENTED, VERIFIED (mock) |
+| 3 | Deduplicated infotypes from `T777D` with `noOfSubtypes` from `T591A` (0 if none), functional category, and infotype text from `T582S` (filtered for `SPRSL = 'E'`, "NA" if missing). | Left joins from distinct `hcm_t777d` to aggregated subtypes and `hcm_t582s` text (`sprsl = 'E'`) | `GET /api/hcm-core/infotype-detail` | IMPLEMENTED, VERIFIED (mock) |
 
-## 5. Main features and capabilities
+## 5. Functional requirements (KPI section 3: PA - Personnel Administration)
+
+### 5.1 Required source data
+| Purpose | SAP table | Fields read |
+|---|---|---|
+| Screen definitions | `T582A` | `INFTY`, `EDYNR`, `LDYNR` |
+| Module pool mapping | `T777D` | `INFTY`, `REPID` |
+| Screen modifications | `T588M` | `REPNA`, `DYNNR`, `ADYNR`, `DBILD` |
+| Dynamic actions | `T588Z` | `INFTY`, `SUBTY`, `FNAME`, `OPERA`, `SEQNO`, `KENNZ`, `VINFO` |
+
+### 5.2 Required calculations
+| # | Requirement | Implementation | Endpoint | Status |
+|---|---|---|---|---|
+| 1a | Classify single screen `EDYNR`: 2000 = Universal Standard, 2001–2899 = Country Specific, 2900–2999 = Fast Entry Screens, 0100–0999 or 9000–9999 = Custom, else = Others. | Classified in Node processor; returns total, category summary, and items per infotype | `GET /api/pa/single-screen-classification` | IMPLEMENTED, VERIFIED (mock) |
+| 1b | Classify list screen `LDYNR`: 3000 = Universal Standard, 3001–3999 = Country Specific, 0100–0999 or 9000–9999 = Custom, else = Others. | Classified in Node processor; returns total, category summary, and items per infotype | `GET /api/pa/list-screen-classification` | IMPLEMENTED, VERIFIED (mock) |
+| 2 | `T588M` module pools `REPNA` where `DYNNR ≠ ADYNR` (excluding blanks, non-deduplicated `REPNA`) mapped to `T777D` (`T588M.REPNA = T777D.REPID`). Returns `infotype` and `modulePool`. | Inner join in SQL; module pools not in `T777D` dropped | `GET /api/pa/module-pool-mapping` | IMPLEMENTED, VERIFIED (mock) |
+| 3 | Iterate through each character in `DBILD` string field for all records and tally occurrences of `-` (Hidden), `*` (Display), `+` (Required), `.` (Optional), grouped by `T777D` infotype. | String length difference in SQL, grouped by `INFTY` | `GET /api/pa/field-visibility-summary` | IMPLEMENTED, VERIFIED (mock) |
+| 4 | Distinct primary keys `(INFTY, SUBTY, FNAME, OPERA, SEQNO)` from `T588Z` grouped by `INFTY` to get total configured dynamic actions per infotype. | `COUNT(*)` over distinct keys grouped by `INFTY` | `GET /api/pa/dynamic-action-count` | IMPLEMENTED, VERIFIED (mock) |
+| 5 | Group records by `(INFTY, SUBTY, FNAME, OPERA)` ordered by `SEQNO`, filter for `KENNZ = 'I'`, extract target infotype from `VINFO` command string (`(?:INS\|COP\|MOD)[,( ]*(\d{4})`), and incorporate any subsequent 'W' lines. | Window function `LEAD` in SQL extracting target infotype and subsequent 'W' default | `GET /api/pa/dynamic-action-triggers` | IMPLEMENTED, VERIFIED (mock) |
+| 6 | Group distinct dynamic action logic blocks by `OPERA` code with friendly trigger descriptions. | Distinct `(INFTY, SUBTY, FNAME, OPERA)` grouped by `OPERA` with label mapping | `GET /api/pa/dynamic-action-by-operation` | IMPLEMENTED, VERIFIED (mock) |
+| 7 | Filter `KENNZ = 'F'`, extract routine name inside parentheses of `VINFO`, and group by `INFTY` with `COUNT(DISTINCT Routine)` and `COUNT(*)`. | Regex extraction `\(([^)]+)\)` in SQL with distinct routine count and names string | `GET /api/pa/dynamic-action-routines` | IMPLEMENTED, VERIFIED (mock) |
+
+## 6. Main features and capabilities
 
 - Per-KPI-section module structure (routes → controller → service → repository → processor), staging tables per section.
 - SAP access via a custom MCP client: HS256 JWT carrying SAP credentials, JSON-RPC `tools/call`, JSON or SSE responses, paging with `rowCount`/`rowSkips`, tolerant row parsing.

@@ -143,9 +143,18 @@ Unit tests cover each accepted shape and the failures (`tests/unit.test.js`).
 
 | SAP table | Fields requested (in order) | Staging table |
 |---|---|---|
-| `T582A` | `INFTY` | `hcm_t582a` |
+| `T777D` | `INFTY` | `hcm_t777d` |
 | `T591A` | `INFTY, SUBTY` | `hcm_t591a` |
 | `T582S` | `SPRSL, INFTY, ITEXT` | `hcm_t582s` |
+
+### 4.7 Tables and fields requested by the PA module (`pa.constants.js`)
+
+| SAP table | Fields requested (in order) | Staging table |
+|---|---|---|
+| `T582A` | `INFTY, EDYNR, LDYNR` | `pa_t582a` |
+| `T777D` | `INFTY, REPID` | `pa_t777d` |
+| `T588M` | `REPNA, DYNNR, ADYNR, DBILD` | `pa_t588m` |
+| `T588Z` | `INFTY, SUBTY, FNAME, OPERA, SEQNO, KENNZ, VINFO` | `pa_t588z` |
 
 Tables are fetched with concurrency `SAP_FETCH_CONCURRENCY` (default 2); each table is read fully into memory before loading.
 

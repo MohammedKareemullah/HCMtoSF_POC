@@ -242,8 +242,8 @@ SELECT h.year, e.land1 AS code, COUNT(*)::int AS hires
 -- HCM Core module queries (src/modules/hcm_core/hcm_core.repository.js)
 -- ---------------------------------------------------------------------------
 
--- distinct infotypes from T582A
-SELECT DISTINCT infty FROM hcm_t582a WHERE infty IS NOT NULL ORDER BY infty;
+-- distinct infotypes from T777D
+SELECT DISTINCT infty FROM hcm_t777d WHERE infty IS NOT NULL ORDER BY infty;
 
 -- subtype count per infotype from T591A
 SELECT infty, COUNT(DISTINCT subty)::int AS subtype_count
@@ -252,20 +252,100 @@ SELECT infty, COUNT(DISTINCT subty)::int AS subtype_count
  GROUP BY infty
  ORDER BY infty;
 
--- infotype + subtype table with English text from T582S
-WITH subtypes AS (
-  SELECT DISTINCT infty, subty FROM hcm_t591a WHERE infty IS NOT NULL
+-- infotype summary table with subtype count and English text (SPRSL = 'E')
+WITH infotypes AS (
+  SELECT DISTINCT infty FROM hcm_t777d WHERE infty IS NOT NULL
+),
+subtypes AS (
+  SELECT infty, COUNT(DISTINCT subty)::int AS subtype_count
+    FROM hcm_t591a
+   WHERE infty IS NOT NULL AND subty IS NOT NULL
+   GROUP BY infty
 ),
 texts AS (
   SELECT DISTINCT ON (infty) infty, itext
     FROM hcm_t582s
-   WHERE sprsl = 'EN' AND infty IS NOT NULL
+   WHERE sprsl = 'E' AND infty IS NOT NULL
    ORDER BY infty, itext
 )
-SELECT s.infty, s.subty, t.itext
-  FROM subtypes s
-  LEFT JOIN texts t ON t.infty = s.infty
- ORDER BY s.infty, s.subty;
+SELECT i.infty, COALESCE(s.subtype_count, 0) AS subtype_count, t.itext
+  FROM infotypes i
+  LEFT JOIN subtypes s ON s.infty = i.infty
+  LEFT JOIN texts t ON t.infty = i.infty
+ ORDER BY i.infty;
+
+-- ---------------------------------------------------------------------------
+-- PA module queries (src/modules/pa/pa.repository.js)
+-- ---------------------------------------------------------------------------
+
+-- 1. Screen classifications (single & list screens from T582A)
+SELECT infty, edynr, ldynr FROM pa_t582a WHERE infty IS NOT NULL ORDER BY infty;
+
+-- 2. Module pool mapping (T588M REPNA where DYNNR != ADYNR mapped to T777D)
+WITH t777 AS (
+  SELECT DISTINCT repid, infty FROM pa_t777d WHERE repid IS NOT NULL AND repid <> ''
+)
+SELECT t.infty, m.repna AS module_pool
+  FROM pa_t588m m
+  INNER JOIN t777 t ON t.repid = m.repna
+ WHERE m.dynnr IS NOT NULL AND m.adynr IS NOT NULL
+   AND m.dynnr <> '' AND m.adynr <> '' AND m.dynnr <> m.adynr
+ ORDER BY t.infty, m.repna;
+
+-- 3. Field visibility summary (DBILD indicator symbols per infotype)
+WITH t777 AS (
+  SELECT DISTINCT repid, infty FROM pa_t777d WHERE repid IS NOT NULL AND repid <> ''
+),
+mapped AS (
+  SELECT t.infty, m.dbild FROM pa_t588m m INNER JOIN t777 t ON t.repid = m.repna WHERE m.dbild IS NOT NULL AND m.dbild <> ''
+)
+SELECT infty,
+       SUM(length(dbild) - length(replace(dbild, '-', '')))::int AS hidden,
+       SUM(length(dbild) - length(replace(dbild, '*', '')))::int AS display_only,
+       SUM(length(dbild) - length(replace(dbild, '+', '')))::int AS required,
+       SUM(length(dbild) - length(replace(dbild, '.', '')))::int AS optional
+  FROM mapped GROUP BY infty ORDER BY infty;
+
+-- 4. Dynamic action count per infotype (distinct T588Z primary keys)
+WITH d AS (
+  SELECT DISTINCT infty, subty, fname, opera, seqno FROM pa_t588z WHERE infty IS NOT NULL
+)
+SELECT infty, COUNT(*)::int AS dynamic_action_count FROM d GROUP BY infty ORDER BY infty;
+
+-- 5. Dynamic action triggers (KENNZ = 'I' with target infotype & optional 'W' line default)
+WITH ordered AS (
+  SELECT infty, subty, fname, opera, seqno, kennz, vinfo,
+         LEAD(kennz) OVER (PARTITION BY infty, subty, fname, opera ORDER BY seqno) AS next_kennz,
+         LEAD(vinfo) OVER (PARTITION BY infty, subty, fname, opera ORDER BY seqno) AS next_vinfo
+    FROM pa_t588z
+)
+SELECT infty AS source_infotype, subty, fname AS trigger_field, opera,
+       (regexp_match(vinfo, '(?:INS|COP|MOD)[,( ]*(\\d{4})', 'i'))[1] AS target_infotype,
+       CASE WHEN upper(next_kennz) = 'W' THEN next_vinfo ELSE NULL END AS field_default
+  FROM ordered
+ WHERE upper(kennz) = 'I'
+   AND (regexp_match(vinfo, '(?:INS|COP|MOD)[,( ]*(\\d{4})', 'i'))[1] IS NOT NULL
+ ORDER BY infty, subty, fname, opera;
+
+-- 6. Dynamic actions grouped by OPERA operation code
+WITH blocks AS (
+  SELECT DISTINCT infty, subty, fname, opera FROM pa_t588z WHERE opera IS NOT NULL
+)
+SELECT opera, COUNT(*)::int AS dynamic_action_count FROM blocks GROUP BY opera ORDER BY opera;
+
+-- 7. Dynamic action routines (KENNZ = 'F', routine name inside parentheses)
+WITH f_records AS (
+  SELECT infty, (regexp_match(vinfo, '\\(([^)]+)\\)'))[1] AS routine_name
+    FROM pa_t588z WHERE upper(kennz) = 'F' AND vinfo IS NOT NULL
+),
+valid_routines AS (
+  SELECT infty, routine_name FROM f_records WHERE routine_name IS NOT NULL AND routine_name <> ''
+)
+SELECT infty,
+       COUNT(DISTINCT routine_name)::int AS unique_routine_count,
+       string_agg(DISTINCT routine_name, ', ' ORDER BY routine_name) AS routine_names,
+       COUNT(*)::int AS total_executions
+  FROM valid_routines GROUP BY infty ORDER BY infty;
 ```
 
 Known SQL gotchas: the `ILIKE $4 || '%'` search does not escape `%`/`_` typed by the user; PERNR in SAP data is zero-padded (a prefix search needs the leading zeros).

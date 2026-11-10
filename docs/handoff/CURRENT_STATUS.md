@@ -18,13 +18,20 @@ Status date: 2026-11-08. Legend: **VERIFIED (mock)** = covered by the automated 
 | KPI 4: employee table with status text, country, company, group, subgroup; filters + pagination + validation | e2e |
 | KPI 5: distinct employees in payroll per `FPPER` present | e2e |
 | KPI 6: hires per year and per year × country | e2e |
-| HCM Core KPI 1: infotype category counts (distinct INFTY from T582A categorized into PA, OM, TM, SAP Reserved, Recruitment, E-Recruiting & Learning, Custom) | unit + e2e |
+| HCM Core KPI 1: infotype category counts (distinct INFTY from T777D categorized into PA, OM, TM, SAP Reserved, Recruitment, E-Recruiting & Learning, Custom) | unit + e2e |
 | HCM Core KPI 2: number of subtypes per infotype (distinct SUBTY from T591A) | unit + e2e |
-| HCM Core KPI 3: infotype/subtype flat detail table with category and English text from T582S (SPRSL='EN') | unit + e2e |
+| HCM Core KPI 3: infotype/subtype detail table with category and English text from T582S (SPRSL='E') | unit + e2e |
+| PA KPI 1: single screen (EDYNR) & list screen (LDYNR) classifications from T582A | unit + e2e |
+| PA KPI 2: module pool mapping (T588M REPNA where DYNNR != ADYNR mapped to T777D INFTY) | unit + e2e |
+| PA KPI 3: field visibility summary (DBILD symbol counts -, *, +, . per infotype) | unit + e2e |
+| PA KPI 4: dynamic action count per infotype (distinct T588Z primary keys) | unit + e2e |
+| PA KPI 5: dynamic action triggers (KENNZ = 'I' with parsed target infotype & optional 'W' line defaults) | unit + e2e |
+| PA KPI 6: dynamic actions by OPERA operation code | unit + e2e |
+| PA KPI 7: dynamic action routines (KENNZ = 'F', routine name inside parentheses) | unit + e2e |
 | `/overview` aggregate, `/sync`, `/sync/status` | e2e |
 | Mock MCP server + synthetic dataset; `inspect:table` diagnostic | used by tests / scripts |
 
-Test totals: **20 pass / 0 fail** (12 e2e, 8 unit) on Node 22, PostgreSQL 16.
+Test totals: **18 unit pass** (on Node 22 without Postgres) + full e2e suites (`headcount.e2e.test.js`, `hcm_core.e2e.test.js`, `pa.e2e.test.js`).
 
 ## 2. Implemented but UNVERIFIED against the real system
 

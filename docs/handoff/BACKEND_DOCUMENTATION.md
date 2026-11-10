@@ -209,16 +209,172 @@ Sample response:
 ```json
 {
   "data": {
-    "total": 10,
+    "total": 9,
     "items": [
-      { "infotype": "0000", "subtype": "Z1", "category": "Personnel Administration (PA)", "infotypeText": "Actions" },
-      { "infotype": "0001", "subtype": "01", "category": "Personnel Administration (PA)", "infotypeText": "Organizational Assignment" },
-      { "infotype": "0001", "subtype": "02", "category": "Personnel Administration (PA)", "infotypeText": "Organizational Assignment" },
-      { "infotype": "0008", "subtype": "01", "category": "Personnel Administration (PA)", "infotypeText": null }
+      { "infotype": "0000", "noOfSubtypes": 1, "category": "Personnel Administration (PA)", "infotypeText": "Actions" },
+      { "infotype": "0001", "noOfSubtypes": 2, "category": "Personnel Administration (PA)", "infotypeText": "Organizational Assignment" },
+      { "infotype": "0002", "noOfSubtypes": 0, "category": "Personnel Administration (PA)", "infotypeText": "Personal Data" },
+      { "infotype": "0008", "noOfSubtypes": 1, "category": "Personnel Administration (PA)", "infotypeText": "NA" }
     ]
   },
   "meta": { "lastSyncedAt": "2026-11-09T12:00:00.000Z", "stale": false }
 }
+```
+
+### 4.8 PA endpoints (`/api/pa`)
+
+| Method | Path | Purpose |
+|---|---|---|
+| POST | `/api/pa/sync` | Force a sync of T582A, T777D, T588M, T588Z from SAP now |
+| GET | `/api/pa/sync/status` | PA sync status |
+| GET | `/api/pa/single-screen-classification` | Classification of single screen (`EDYNR`) per infotype from T582A |
+| GET | `/api/pa/list-screen-classification` | Classification of list screen (`LDYNR`) per infotype from T582A |
+| GET | `/api/pa/module-pool-mapping` | T588M module pools (`REPNA`) where `DYNNR ≠ ADYNR` mapped to T777D `INFTY` |
+| GET | `/api/pa/field-visibility-summary` | Summary of hidden (`-`), display (`*`), required (`+`), and optional (`.`) fields per infotype |
+| GET | `/api/pa/dynamic-action-count` | Total dynamic actions configured per infotype from T588Z |
+| GET | `/api/pa/dynamic-action-triggers` | Logic blocks with KENNZ = 'I' extracting target infotype and subsequent 'W' line defaults |
+| GET | `/api/pa/dynamic-action-by-operation` | Distinct dynamic action blocks grouped by OPERA operation code |
+| GET | `/api/pa/dynamic-action-routines` | KENNZ = 'F' routines parsed from VINFO with unique routine count, names, and total executions |
+
+#### `GET /api/pa/single-screen-classification`
+Sample response:
+```json
+{
+  "data": {
+    "total": 7,
+    "summary": [
+      { "classification": "Universal Standard", "count": 1 },
+      { "classification": "Country Specific", "count": 2 },
+      { "classification": "Fast Entry Screens", "count": 1 },
+      { "classification": "Custom", "count": 2 },
+      { "classification": "Others", "count": 1 }
+    ],
+    "items": [
+      { "infotype": "0001", "singleScreen": "2000", "classification": "Universal Standard" },
+      { "infotype": "0002", "singleScreen": "2010", "classification": "Country Specific" }
+    ]
+  },
+  "meta": { "lastSyncedAt": "2026-11-09T18:00:00.000Z", "stale": false }
+}
+```
+
+#### `GET /api/pa/module-pool-mapping`
+Sample response:
+```json
+{
+  "data": {
+    "total": 3,
+    "items": [
+      { "infotype": "0001", "modulePool": "MP000100" },
+      { "infotype": "0002", "modulePool": "MP000200" },
+      { "infotype": "0007", "modulePool": "MP000700" }
+    ]
+  },
+  "meta": { "lastSyncedAt": "2026-11-09T18:00:00.000Z", "stale": false }
+}
+```
+
+#### `GET /api/pa/field-visibility-summary`
+Sample response:
+```json
+{
+  "data": {
+    "total": 3,
+    "items": [
+      { "infotype": "0001", "hidden": 2, "displayOnly": 2, "required": 2, "optional": 6 },
+      { "infotype": "0002", "hidden": 2, "displayOnly": 1, "required": 1, "optional": 0 },
+      { "infotype": "0007", "hidden": 1, "displayOnly": 0, "required": 2, "optional": 4 }
+    ]
+  },
+  "meta": { "lastSyncedAt": "2026-11-09T18:00:00.000Z", "stale": false }
+}
+```
+
+#### `GET /api/pa/dynamic-action-count`
+Sample response:
+```json
+{
+  "data": {
+    "total": 3,
+    "totalActions": 8,
+    "items": [
+      { "infotype": "0001", "dynamicActionCount": 5 },
+      { "infotype": "0002", "dynamicActionCount": 2 },
+      { "infotype": "0007", "dynamicActionCount": 1 }
+    ]
+  },
+  "meta": { "lastSyncedAt": "2026-11-09T18:00:00.000Z", "stale": false }
+}
+```
+
+#### `GET /api/pa/dynamic-action-triggers`
+Sample response:
+```json
+{
+  "data": {
+    "total": 2,
+    "items": [
+      {
+        "sourceInfotype": "0001",
+        "subtype": "",
+        "triggerField": "MASSN",
+        "opera": "04",
+        "operationLabel": "Create",
+        "targetInfotype": "0002",
+        "fieldDefault": "MASSN = '01'"
+      },
+      {
+        "sourceInfotype": "0002",
+        "subtype": null,
+        "triggerField": "GBDAT",
+        "opera": "00",
+        "operationLabel": "Independent of the current function carried out",
+        "targetInfotype": "0007"
+      }
+    ]
+  },
+  "meta": { "lastSyncedAt": "2026-11-09T18:00:00.000Z", "stale": false }
+}
+```
+
+#### `GET /api/pa/dynamic-action-by-operation`
+Sample response:
+```json
+{
+  "data": {
+    "total": 5,
+    "items": [
+      { "operation": "00", "description": "Independent of the current function carried out", "dynamicActionCount": 1 },
+      { "operation": "02", "description": "Change", "dynamicActionCount": 1 },
+      { "operation": "04", "description": "Create", "dynamicActionCount": 1 },
+      { "operation": "06", "description": "Change and create", "dynamicActionCount": 1 },
+      { "operation": "08", "description": "Delete", "dynamicActionCount": 1 }
+    ]
+  },
+  "meta": { "lastSyncedAt": "2026-11-09T18:00:00.000Z", "stale": false }
+}
+```
+
+#### `GET /api/pa/dynamic-action-routines`
+Sample response:
+```json
+{
+  "data": {
+    "total": 3,
+    "items": [
+      {
+        "infotype": "0001",
+        "uniqueRoutineCount": 2,
+        "routineNames": "DATE_CHECK, MASSN_CHECK",
+        "uniqueRoutineNames": "DATE_CHECK, MASSN_CHECK",
+        "totalDynamicActions": 3,
+        "totalExecutions": 3
+      }
+    ]
+  },
+  "meta": { "lastSyncedAt": "2026-11-09T18:00:00.000Z", "stale": false }
+}
+```
 ```
 
 ### 4.8 Errors

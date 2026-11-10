@@ -82,13 +82,18 @@ const hrpy = [
 // 0001 has duplicate row in T777D to verify dedup works (should still count as 1).
 // ---------------------------------------------------------------------------
 
-// T777D: INFTY only (intentional duplicate for dedup test)
+// T777D: INFTY + REPID (intentional duplicate for dedup test)
 const t777d = [
-  { INFTY: "0000" }, { INFTY: "0001" }, { INFTY: "0001" }, // duplicate 0001
-  { INFTY: "0002" }, { INFTY: "0007" }, { INFTY: "0008" },
-  { INFTY: "1000" }, { INFTY: "1001" },
-  { INFTY: "2001" },
-  { INFTY: "9000" },
+  { INFTY: "0000", REPID: "" },
+  { INFTY: "0001", REPID: "MP000100" },
+  { INFTY: "0001", REPID: "MP000100" }, // duplicate 0001
+  { INFTY: "0002", REPID: "MP000200" },
+  { INFTY: "0007", REPID: "MP000700" },
+  { INFTY: "0008", REPID: "MP000800" },
+  { INFTY: "1000", REPID: "MP100000" },
+  { INFTY: "1001", REPID: "MP100100" },
+  { INFTY: "2001", REPID: "MP200100" },
+  { INFTY: "9000", REPID: "MP900000" },
 ];
 
 // T591A: INFTY + SUBTY (subtypes per infotype)
@@ -106,7 +111,7 @@ const t591a = [
   { INFTY: "0001", SUBTY: "02" },
   { INFTY: "0007", SUBTY: "01" }, { INFTY: "0007", SUBTY: "02" }, { INFTY: "0007", SUBTY: "03" },
   { INFTY: "0008", SUBTY: "01" },
-  { INFTY: "1000", SUBTY: "A" },  { INFTY: "1000", SUBTY: "B" },
+  { INFTY: "1000", SUBTY: "A" }, { INFTY: "1000", SUBTY: "B" },
   { INFTY: "9000", SUBTY: "C1" },
 ];
 
@@ -125,7 +130,46 @@ const t582s = [
   { SPRSL: "E", INFTY: "9000", ITEXT: "Custom Infotype 9000" },
 ];
 
+// ---------------------------------------------------------------------------
+// PA Module: T582A, T588M, T588Z synthetic data
+// ---------------------------------------------------------------------------
+
+// T582A: INFTY, EDYNR, LDYNR
+const pa_t582a = [
+  { INFTY: "0001", EDYNR: "2000", LDYNR: "3000" }, // universal / universal
+  { INFTY: "0002", EDYNR: "2010", LDYNR: "3100" }, // country / country
+  { INFTY: "0007", EDYNR: "2500", LDYNR: "3200" }, // country / country
+  { INFTY: "0014", EDYNR: "2900", LDYNR: "3050" }, // fast entry / country
+  { INFTY: "9000", EDYNR: "9100", LDYNR: "9100" }, // custom / custom
+  { INFTY: "0100", EDYNR: "0100", LDYNR: "0200" }, // custom / custom
+  { INFTY: "0021", EDYNR: "1500", LDYNR: "4000" }, // others / others
+];
+
+// T588M: REPNA, DYNNR, ADYNR, DBILD
+const pa_t588m = [
+  { REPNA: "MP000100", DYNNR: "1000", ADYNR: "2000", DBILD: "+-*.-+*.." }, // diff -> EP2, EP3
+  { REPNA: "MP000100", DYNNR: "1000", ADYNR: "1000", DBILD: "..." },        // same -> no EP2, EP3
+  { REPNA: "MP000200", DYNNR: "2000", ADYNR: "3000", DBILD: "--+*" },       // diff -> EP2, EP3
+  { REPNA: "MP000700", DYNNR: "", ADYNR: "1000", DBILD: "..." },        // blank -> no EP2, EP3
+  { REPNA: "MP000700", DYNNR: "2000", ADYNR: "3000", DBILD: "++-." },       // diff -> EP2, EP3
+  { REPNA: "MP999999", DYNNR: "1000", ADYNR: "2000", DBILD: "++-" },        // unmapped in T777D -> excluded
+];
+
+// T588Z: INFTY, SUBTY, FNAME, OPERA, SEQNO, KENNZ, VINFO
+const pa_t588z = [
+  { INFTY: "0001", SUBTY: "", FNAME: "MASSN", OPERA: "04", SEQNO: "010", KENNZ: "F", VINFO: "RPMASS00(MASSN_CHECK)" },
+  { INFTY: "0001", SUBTY: "", FNAME: "MASSN", OPERA: "04", SEQNO: "020", KENNZ: "I", VINFO: "INS(0002,,,,,,)" },
+  { INFTY: "0001", SUBTY: "", FNAME: "MASSN", OPERA: "04", SEQNO: "030", KENNZ: "W", VINFO: "MASSN = '01'" },
+  { INFTY: "0001", SUBTY: "", FNAME: "ENDDA", OPERA: "02", SEQNO: "010", KENNZ: "F", VINFO: "RPDIEN00(DATE_CHECK)" },
+  { INFTY: "0001", SUBTY: "", FNAME: "TRFGR", OPERA: "08", SEQNO: "010", KENNZ: "F", VINFO: "RPMASS00(MASSN_CHECK)" },
+  { INFTY: "0002", SUBTY: "", FNAME: "GBDAT", OPERA: "00", SEQNO: "010", KENNZ: "F", VINFO: "RPDKON00(BIRTH_CHECK)" },
+  { INFTY: "0002", SUBTY: "", FNAME: "GBDAT", OPERA: "00", SEQNO: "020", KENNZ: "I", VINFO: "COP(0007,,,,)" },
+  { INFTY: "0007", SUBTY: "", FNAME: "SCHKZ", OPERA: "06", SEQNO: "010", KENNZ: "F", VINFO: "RPTIME00(SHIFT_CHECK)" },
+];
+
 export const MOCK_TABLES = {
   PA0000: pa0000, PA0001: pa0001, T500P: t500p, T001: t001, HRPY_RGDIR: hrpy,
-  T582A: t777d, T777D: t777d, T591A: t591a, T582S: t582s,
+  T582A: pa_t582a, T777D: t777d, T591A: t591a, T582S: t582s,
+  T588M: pa_t588m, T588Z: pa_t588z,
+};
 };

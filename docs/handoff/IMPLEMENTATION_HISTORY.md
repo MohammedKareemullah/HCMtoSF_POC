@@ -72,6 +72,25 @@ The turn-5 patch touched: `README.md`, `.env.example`, `src/config/env.js`, `src
    - Append-only migration `003_hcm_core.sql` creating `hcm_t582a`, `hcm_t591a`, `hcm_t582s`.
    - Registered under `/api/hcm-core` in `src/modules/index.js`.
    - Synthetic data in `mock/mockData.js`, unit tests in `tests/unit.test.js`, e2e test in `tests/hcm_core.e2e.test.js`.
+8. Turn 7: refined KPI section 2 (**HCM Core**):
+   - Changed infotype source table from `T582A` to `T777D` for `/api/hcm-core/infotype-categories`.
+   - Filter `SPRSL` updated to `'E'` (single-char SAP code instead of `'EN'`).
+   - `/api/hcm-core/infotype-detail` updated to return `{ infotype, noOfSubtypes, category, infotypeText }` deduplicated per infotype (0 subtypes if unmapped, "NA" if missing text).
+   - Migration `004_t777d.sql` created for `hcm_t777d`.
+9. Turn 8: implemented KPI section 3 (**PA - Personnel Administration**):
+   - Tables: `T582A` (`INFTY, EDYNR, LDYNR`), `T777D` (`INFTY, REPID`), `T588M` (`REPNA, DYNNR, ADYNR, DBILD`), `T588Z` (`INFTY, SUBTY, FNAME, OPERA, SEQNO, KENNZ, VINFO`).
+   - Append-only migration `005_pa.sql` creating `pa_t582a`, `pa_t777d`, `pa_t588m`, and `pa_t588z`.
+   - Registered under `/api/pa` in `src/modules/index.js`.
+   - 7 KPI requirements delivering 8 read endpoints + 2 sync endpoints:
+     1. `GET /api/pa/single-screen-classification` (EDYNR: 2000 Universal Standard, 2001–2899 Country Specific, 2900–2999 Fast Entry Screens, 0100–0999/9000–9999 Custom, else Others).
+     2. `GET /api/pa/list-screen-classification` (LDYNR: 3000 Universal Standard, 3001–3999 Country Specific, 0100–0999/9000–9999 Custom, else Others).
+     3. `GET /api/pa/module-pool-mapping` (T588M REPNA where DYNNR != ADYNR mapped to T777D INFTY).
+     4. `GET /api/pa/field-visibility-summary` (tally DBILD symbols `-`, `*`, `+`, `.` per infotype via T777D mapping).
+     5. `GET /api/pa/dynamic-action-count` (distinct primary keys grouped by INFTY).
+     6. `GET /api/pa/dynamic-action-triggers` (KENNZ = 'I' with parsed target infotype and subsequent 'W' line default dependencies).
+     7. `GET /api/pa/dynamic-action-by-operation` (distinct blocks grouped by OPERA operation code with trigger descriptions).
+     8. `GET /api/pa/dynamic-action-routines` (KENNZ = 'F', parsed routine name from parentheses in VINFO, unique routine count + total dynamic actions).
+   - Added unit tests in `tests/unit.test.js` (18/18 pass) and e2e test suite `tests/pa.e2e.test.js`.
 
 ## 5. Bugs, errors and issues encountered, and resolutions
 

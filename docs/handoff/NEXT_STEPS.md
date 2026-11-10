@@ -2,7 +2,9 @@
 
 ## 1. Where work stopped
 
-**Last feature worked on:** implemented the second KPI section **hcm_core** (infotype category summary from T582A, subtype counts per infotype from T591A, infotype/subtype detail table with English text from T582S). Added migration `003_hcm_core.sql`, mock data in `mock/mockData.js`, unit tests in `tests/unit.test.js`, and e2e test in `tests/hcm_core.e2e.test.js`.
+**Last feature worked on:** implemented the third KPI section **pa** (single & list screen classifications from T582A, module-pool mapping from T588M/T777D, field visibility summary of DBILD characters, dynamic action counts, triggers with KENNZ = 'I' & 'W' defaults, operations grouping, and routine parsing from T588Z). Added migration `005_pa.sql`, mock datasets in `mock/mockData.js`, unit tests in `tests/unit.test.js`, and e2e test suite in `tests/pa.e2e.test.js`.
+
+Previously implemented: **headcount** (migration 001/002) and **hcm_core** (migration 003/004).
 
 After that, the owner asked only for this handoff documentation. There is **no half-written code**: nothing is in progress in the source tree.
 
