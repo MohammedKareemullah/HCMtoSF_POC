@@ -2,9 +2,9 @@
 
 ## 1. Where work stopped
 
-**Last feature worked on:** implemented the third KPI section **pa** (single & list screen classifications from T582A, module-pool mapping from T588M/T777D, field visibility summary of DBILD characters, dynamic action counts, triggers with KENNZ = 'I' & 'W' defaults, operations grouping, and routine parsing from T588Z). Added migration `005_pa.sql`, mock datasets in `mock/mockData.js`, unit tests in `tests/unit.test.js`, and e2e test suite in `tests/pa.e2e.test.js`.
+**Last feature worked on:** implemented the fourth KPI section **om** (standard vs custom object types from T778O, relationships from T778V, evaluation paths from T778A, objects and relationships per plan version from HRP1000/HRP1001 + T778P, and assigned vs unassigned auth profiles from T77PQ + T77UA). Added migration `006_om.sql`, mock datasets in `mock/mockData.js`, unit tests in `tests/unit.test.js`, and e2e test suite in `tests/om.e2e.test.js`.
 
-Previously implemented: **headcount** (migration 001/002) and **hcm_core** (migration 003/004).
+Previously implemented: **headcount** (migration 001/002), **hcm_core** (migration 003/004), and **pa** (migration 005).
 
 After that, the owner asked only for this handoff documentation. There is **no half-written code**: nothing is in progress in the source tree.
 

@@ -97,7 +97,31 @@ These are the owner's requirements, preserved as faithfully as possible. Status 
 | 6 | Group distinct dynamic action logic blocks by `OPERA` code with friendly trigger descriptions. | Distinct `(INFTY, SUBTY, FNAME, OPERA)` grouped by `OPERA` with label mapping | `GET /api/pa/dynamic-action-by-operation` | IMPLEMENTED, VERIFIED (mock) |
 | 7 | Filter `KENNZ = 'F'`, extract routine name inside parentheses of `VINFO`, and group by `INFTY` with `COUNT(DISTINCT Routine)` and `COUNT(*)`. | Regex extraction `\(([^)]+)\)` in SQL with distinct routine count and names string | `GET /api/pa/dynamic-action-routines` | IMPLEMENTED, VERIFIED (mock) |
 
-## 6. Main features and capabilities
+## 6. Functional requirements (KPI section 4: OM - Organizational Management)
+
+### 6.1 Required source data
+| Purpose | SAP table | Fields read |
+|---|---|---|
+| Object types | `T778O` | `OTYPE` |
+| Relationships | `T778V` | `RELAT` |
+| Evaluation paths | `T778A` | `WEGID` |
+| Objects | `HRP1000` | `OTYPE`, `PLVAR` |
+| Object relationships | `HRP1001` | `RELAT`, `PLVAR` |
+| Plan version texts | `T778P` | `PLVAR`, `PTEXT` |
+| Auth profile definitions | `T77PQ` | `PROFL` |
+| User profile assignments | `T77UA` | `UNAME`, `PROFL` |
+
+### 6.2 Required calculations
+| # | Requirement | Implementation | Endpoint | Status |
+|---|---|---|---|---|
+| 1 | From `T778O`: remove blank/null `OTYPE`. Count standard (does not start with '9') and custom (starts with '9'). | `COUNT(*) FILTER` in SQL | `GET /api/om/object-types` | IMPLEMENTED, VERIFIED (mock) |
+| 2 | From `T778V`: remove blank/null `RELAT`. Count standard vs custom (starts with 'Z' or 900–999). | `COUNT(*) FILTER` in SQL with regex | `GET /api/om/relationships` | IMPLEMENTED, VERIFIED (mock) |
+| 3 | From `T778A`: remove blank/null `WEGID`. Count standard vs custom (starts with 'Z'). | `COUNT(*) FILTER` in SQL | `GET /api/om/evaluation-paths` | IMPLEMENTED, VERIFIED (mock) |
+| 4 | From `HRP1000` + `T778P`: count `OTYPE` grouped by `PLVAR`, mapped to `PTEXT`. | `COUNT(*)` grouped by `PLVAR` with left join to `T778P` | `GET /api/om/objects-per-plan-version` | IMPLEMENTED, VERIFIED (mock) |
+| 5 | From `HRP1001` + `T778P`: count `RELAT` grouped by `PLVAR`, mapped to `PTEXT`. | `COUNT(*)` grouped by `PLVAR` with left join to `T778P` | `GET /api/om/relationships-per-plan-version` | IMPLEMENTED, VERIFIED (mock) |
+| 6 | From `T77PQ` + `T77UA`: map `T77PQ-PROFL = T77UA-PROFL` to count assigned vs unassigned auth profiles. | `COUNT(*) FILTER` with left join to `T77UA` | `GET /api/om/auth-profiles` | IMPLEMENTED, VERIFIED (mock) |
+
+## 7. Main features and capabilities
 
 - Per-KPI-section module structure (routes → controller → service → repository → processor), staging tables per section.
 - SAP access via a custom MCP client: HS256 JWT carrying SAP credentials, JSON-RPC `tools/call`, JSON or SSE responses, paging with `rowCount`/`rowSkips`, tolerant row parsing.

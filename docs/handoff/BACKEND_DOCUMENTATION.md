@@ -298,9 +298,9 @@ Sample response:
     "total": 3,
     "totalActions": 8,
     "items": [
-      { "infotype": "0001", "dynamicActionCount": 5 },
-      { "infotype": "0002", "dynamicActionCount": 2 },
-      { "infotype": "0007", "dynamicActionCount": 1 }
+      { "infotype": "0001", "dynamicActionSeqCount": 5, "dynamicCount": 3 },
+      { "infotype": "0002", "dynamicActionSeqCount": 2, "dynamicCount": 1 },
+      { "infotype": "0007", "dynamicActionSeqCount": 1, "dynamicCount": 1 }
     ]
   },
   "meta": { "lastSyncedAt": "2026-11-09T18:00:00.000Z", "stale": false }
@@ -314,23 +314,8 @@ Sample response:
   "data": {
     "total": 2,
     "items": [
-      {
-        "sourceInfotype": "0001",
-        "subtype": "",
-        "triggerField": "MASSN",
-        "opera": "04",
-        "operationLabel": "Create",
-        "targetInfotype": "0002",
-        "fieldDefault": "MASSN = '01'"
-      },
-      {
-        "sourceInfotype": "0002",
-        "subtype": null,
-        "triggerField": "GBDAT",
-        "opera": "00",
-        "operationLabel": "Independent of the current function carried out",
-        "targetInfotype": "0007"
-      }
+      { "infotype": "0001", "targetInfotypes": ["0002"] },
+      { "infotype": "0002", "targetInfotypes": ["0007"] }
     ]
   },
   "meta": { "lastSyncedAt": "2026-11-09T18:00:00.000Z", "stale": false }
@@ -344,11 +329,11 @@ Sample response:
   "data": {
     "total": 5,
     "items": [
-      { "operation": "00", "description": "Independent of the current function carried out", "dynamicActionCount": 1 },
-      { "operation": "02", "description": "Change", "dynamicActionCount": 1 },
-      { "operation": "04", "description": "Create", "dynamicActionCount": 1 },
-      { "operation": "06", "description": "Change and create", "dynamicActionCount": 1 },
-      { "operation": "08", "description": "Delete", "dynamicActionCount": 1 }
+      { "operation": "00", "description": "Independent of the current function carried out", "dynamicActionCount": 1, "dynamicActionSeqCount": 2 },
+      { "operation": "02", "description": "Change", "dynamicActionCount": 1, "dynamicActionSeqCount": 1 },
+      { "operation": "04", "description": "Create", "dynamicActionCount": 1, "dynamicActionSeqCount": 3 },
+      { "operation": "06", "description": "Change and create", "dynamicActionCount": 1, "dynamicActionSeqCount": 1 },
+      { "operation": "08", "description": "Delete", "dynamicActionCount": 1, "dynamicActionSeqCount": 1 }
     ]
   },
   "meta": { "lastSyncedAt": "2026-11-09T18:00:00.000Z", "stale": false }
@@ -375,9 +360,103 @@ Sample response:
   "meta": { "lastSyncedAt": "2026-11-09T18:00:00.000Z", "stale": false }
 }
 ```
+
+### 4.9 OM endpoints (`/api/om`)
+
+| Method | Path | Purpose |
+|---|---|---|
+| POST | `/api/om/sync` | Force a sync of OM tables (T778O, T778V, T778A, HRP1000, HRP1001, T778P, T77PQ, T77UA) from SAP now |
+| GET | `/api/om/sync/status` | OM sync status |
+| GET | `/api/om/object-types` | Count of standard (not starting with 9) vs custom (starts with 9) OM object types from T778O |
+| GET | `/api/om/relationships` | Count of standard vs custom (starts with Z or 900–999) OM relationships from T778V |
+| GET | `/api/om/evaluation-paths` | Count of standard vs custom (starts with Z) OM evaluation paths from T778A |
+| GET | `/api/om/objects-per-plan-version` | Count of objects (OTYPE from HRP1000) grouped by plan version (PLVAR) with description (PTEXT from T778P) |
+| GET | `/api/om/relationships-per-plan-version` | Count of relationships (RELAT from HRP1001) grouped by plan version (PLVAR) with description (PTEXT from T778P) |
+| GET | `/api/om/auth-profiles` | Count of assigned vs unassigned structural authorization profiles from T77PQ mapped to T77UA |
+
+#### `GET /api/om/object-types`
+Sample response:
+```json
+{
+  "data": {
+    "stdOmObjects": 3,
+    "customOmObjects": 2,
+    "total": 5
+  },
+  "meta": { "lastSyncedAt": "2026-11-10T12:00:00.000Z", "stale": false }
+}
 ```
 
-### 4.8 Errors
+#### `GET /api/om/relationships`
+Sample response:
+```json
+{
+  "data": {
+    "stdOmRelationships": 3,
+    "customOmRelationships": 2,
+    "total": 5
+  },
+  "meta": { "lastSyncedAt": "2026-11-10T12:00:00.000Z", "stale": false }
+}
+```
+
+#### `GET /api/om/evaluation-paths`
+Sample response:
+```json
+{
+  "data": {
+    "stdOmEvaluationPaths": 2,
+    "customOmEvaluationPaths": 1,
+    "total": 3
+  },
+  "meta": { "lastSyncedAt": "2026-11-10T12:00:00.000Z", "stale": false }
+}
+```
+
+#### `GET /api/om/objects-per-plan-version`
+Sample response:
+```json
+{
+  "data": {
+    "total": 2,
+    "items": [
+      { "plvar": "01", "ptext": "Current plan", "noOfObjects": 3 },
+      { "plvar": "02", "ptext": "Version 02", "noOfObjects": 1 }
+    ]
+  },
+  "meta": { "lastSyncedAt": "2026-11-10T12:00:00.000Z", "stale": false }
+}
+```
+
+#### `GET /api/om/relationships-per-plan-version`
+Sample response:
+```json
+{
+  "data": {
+    "total": 2,
+    "items": [
+      { "plvar": "01", "ptext": "Current plan", "noOfRelationships": 2 },
+      { "plvar": "02", "ptext": "Version 02", "noOfRelationships": 2 }
+    ]
+  },
+  "meta": { "lastSyncedAt": "2026-11-10T12:00:00.000Z", "stale": false }
+}
+```
+
+#### `GET /api/om/auth-profiles`
+Sample response:
+```json
+{
+  "data": {
+    "assignedAuthProfiles": 2,
+    "unassignedAuthProfiles": 1,
+    "total": 3
+  },
+  "meta": { "lastSyncedAt": "2026-11-10T12:00:00.000Z", "stale": false }
+}
+```
+
+### 4.10 Errors
 
 `{ "error": { "code": "<CODE>", "message": "...", "details"?: ... } }`
 

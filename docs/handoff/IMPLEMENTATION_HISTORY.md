@@ -87,10 +87,22 @@ The turn-5 patch touched: `README.md`, `.env.example`, `src/config/env.js`, `src
      3. `GET /api/pa/module-pool-mapping` (T588M REPNA where DYNNR != ADYNR mapped to T777D INFTY).
      4. `GET /api/pa/field-visibility-summary` (tally DBILD symbols `-`, `*`, `+`, `.` per infotype via T777D mapping).
      5. `GET /api/pa/dynamic-action-count` (distinct primary keys grouped by INFTY).
-     6. `GET /api/pa/dynamic-action-triggers` (KENNZ = 'I' with parsed target infotype and subsequent 'W' line default dependencies).
-     7. `GET /api/pa/dynamic-action-by-operation` (distinct blocks grouped by OPERA operation code with trigger descriptions).
+     6. `GET /api/pa/dynamic-action-triggers` (unique source infotype and list of unique target infotypes).
+     7. `GET /api/pa/dynamic-action-by-operation` (distinct blocks grouped by OPERA operation code with dynamicActionCount and dynamicActionSeqCount).
      8. `GET /api/pa/dynamic-action-routines` (KENNZ = 'F', parsed routine name from parentheses in VINFO, unique routine count + total dynamic actions).
-   - Added unit tests in `tests/unit.test.js` (18/18 pass) and e2e test suite `tests/pa.e2e.test.js`.
+   - Added unit tests in `tests/unit.test.js` and e2e test suite `tests/pa.e2e.test.js`.
+10. Turn 9: implemented KPI section 4 (**OM - Organizational Management**):
+   - Tables: `T778O` (`OTYPE`), `T778V` (`RELAT`), `T778A` (`WEGID`), `HRP1000` (`OTYPE, PLVAR`), `HRP1001` (`RELAT, PLVAR`), `T778P` (`PLVAR, PTEXT`), `T77PQ` (`PROFL`), `T77UA` (`UNAME, PROFL`).
+   - Append-only migration `006_om.sql` creating `om_t778o`, `om_t778v`, `om_t778a`, `om_hrp1000`, `om_hrp1001`, `om_t778p`, `om_t77pq`, and `om_t77ua`.
+   - Registered under `/api/om` in `src/modules/index.js`.
+   - 6 KPI requirements delivering 6 read endpoints + 2 sync endpoints:
+     1. `GET /api/om/object-types` (count standard vs custom starts with 9).
+     2. `GET /api/om/relationships` (count standard vs custom starts with Z or 900–999).
+     3. `GET /api/om/evaluation-paths` (count standard vs custom starts with Z).
+     4. `GET /api/om/objects-per-plan-version` (count OTYPE from HRP1000 per PLVAR with T778P PTEXT).
+     5. `GET /api/om/relationships-per-plan-version` (count RELAT from HRP1001 per PLVAR with T778P PTEXT).
+     6. `GET /api/om/auth-profiles` (count assigned vs unassigned structural profiles from T77PQ in T77UA).
+   - Added unit tests in `tests/unit.test.js` (24/24 pass) and e2e test suite `tests/om.e2e.test.js`.
 
 ## 5. Bugs, errors and issues encountered, and resolutions
 

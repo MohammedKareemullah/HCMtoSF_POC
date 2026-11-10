@@ -26,6 +26,14 @@ import {
   buildDynamicActionByOperation,
   buildDynamicActionRoutines,
 } from "../src/modules/pa/pa.processor.js";
+import {
+  buildObjectTypesSummary,
+  buildRelationshipsSummary,
+  buildEvaluationPathsSummary,
+  buildObjectsPerPlanVersion,
+  buildRelationshipsPerPlanVersion,
+  buildAuthProfilesSummary,
+} from "../src/modules/om/om.processor.js";
 
 test("sapDate converts SAP dates and rejects junk", () => {
   assert.equal(sapDate("20240229"), "2024-02-29");
@@ -331,4 +339,85 @@ test("buildDynamicActionRoutines formats routine names and counts", () => {
   assert.equal(result.items[0].uniqueRoutineCount, 2);
   assert.equal(result.items[0].routineNames, "DATE_CHECK, MASSN_CHECK");
   assert.equal(result.items[0].totalDynamicActions, 3);
+});
+
+test("buildObjectTypesSummary separates standard vs custom (starts with 9) OM objects", () => {
+  const rows = [
+    { otype: "O" },
+    { otype: "S" },
+    { otype: "C" },
+    { otype: "9A" },
+    { otype: "9Z" },
+  ];
+  const result = buildObjectTypesSummary(rows);
+  assert.equal(result.stdOmObjects, 3);
+  assert.equal(result.customOmObjects, 2);
+  assert.equal(result.total, 5);
+
+  const preAgg = buildObjectTypesSummary({ std_om_objects: 5, custom_om_objects: 1, total: 6 });
+  assert.equal(preAgg.stdOmObjects, 5);
+  assert.equal(preAgg.customOmObjects, 1);
+});
+
+test("buildRelationshipsSummary separates standard vs custom (starts with Z or 900-999)", () => {
+  const rows = [
+    { relat: "002" },
+    { relat: "003" },
+    { relat: "A01" },
+    { relat: "Z01" },
+    { relat: "950" },
+  ];
+  const result = buildRelationshipsSummary(rows);
+  assert.equal(result.stdOmRelationships, 3);
+  assert.equal(result.customOmRelationships, 2);
+  assert.equal(result.total, 5);
+});
+
+test("buildEvaluationPathsSummary separates standard vs custom (starts with Z)", () => {
+  const rows = [
+    { wegid: "O-S-P" },
+    { wegid: "SBES" },
+    { wegid: "ZOM_PATH" },
+  ];
+  const result = buildEvaluationPathsSummary(rows);
+  assert.equal(result.stdOmEvaluationPaths, 2);
+  assert.equal(result.customOmEvaluationPaths, 1);
+  assert.equal(result.total, 3);
+});
+
+test("buildObjectsPerPlanVersion formats PLVAR, PTEXT, and noOfObjects", () => {
+  const rows = [
+    { plvar: "01", ptext: "Current plan", no_of_objects: 3 },
+    { plvar: "02", ptext: "Version 02", no_of_objects: 1 },
+  ];
+  const result = buildObjectsPerPlanVersion(rows);
+  assert.equal(result.total, 2);
+  assert.deepEqual(result.items, [
+    { plvar: "01", ptext: "Current plan", noOfObjects: 3 },
+    { plvar: "02", ptext: "Version 02", noOfObjects: 1 },
+  ]);
+});
+
+test("buildRelationshipsPerPlanVersion formats PLVAR, PTEXT, and noOfRelationships", () => {
+  const rows = [
+    { plvar: "01", ptext: "Current plan", no_of_relationships: 2 },
+    { plvar: "02", ptext: "Version 02", no_of_relationships: 2 },
+  ];
+  const result = buildRelationshipsPerPlanVersion(rows);
+  assert.equal(result.total, 2);
+  assert.deepEqual(result.items, [
+    { plvar: "01", ptext: "Current plan", noOfRelationships: 2 },
+    { plvar: "02", ptext: "Version 02", noOfRelationships: 2 },
+  ]);
+});
+
+test("buildAuthProfilesSummary calculates assigned vs unassigned structural profiles", () => {
+  const input = {
+    t77pq: [{ profl: "ALL" }, { profl: "HR_MGR" }, { profl: "FIN_VIEW" }],
+    t77ua: [{ profl: "ALL" }, { profl: "HR_MGR" }],
+  };
+  const result = buildAuthProfilesSummary(input);
+  assert.equal(result.assignedAuthProfiles, 2);
+  assert.equal(result.unassignedAuthProfiles, 1);
+  assert.equal(result.total, 3);
 });

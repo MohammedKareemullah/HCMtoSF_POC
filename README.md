@@ -109,6 +109,14 @@ All GETs return `{ data, meta: { lastSyncedAt, stale, warning? } }`.
 | GET | `/api/pa/dynamic-action-triggers` | Logic blocks with KENNZ = 'I' extracting target infotype and subsequent 'W' line defaults |
 | GET | `/api/pa/dynamic-action-by-operation` | Distinct dynamic action blocks grouped by OPERA operation code |
 | GET | `/api/pa/dynamic-action-routines` | KENNZ = 'F' routines parsed from VINFO with unique routine count, names, and total executions |
+| POST | `/api/om/sync` | Fetch OM tables (T778O, T778V, T778A, HRP1000, HRP1001, T778P, T77PQ, T77UA) from SAP now |
+| GET | `/api/om/sync/status` | Syncing flag, last success, latest run for OM |
+| GET | `/api/om/object-types` | Count of standard (not starting with 9) vs custom (starts with 9) OM object types from T778O |
+| GET | `/api/om/relationships` | Count of standard vs custom (starts with Z or 900–999) OM relationships from T778V |
+| GET | `/api/om/evaluation-paths` | Count of standard vs custom (starts with Z) OM evaluation paths from T778A |
+| GET | `/api/om/objects-per-plan-version` | Count of objects (OTYPE from HRP1000) grouped by plan version (PLVAR) with description (PTEXT from T778P) |
+| GET | `/api/om/relationships-per-plan-version` | Count of relationships (RELAT from HRP1001) grouped by plan version (PLVAR) with description (PTEXT from T778P) |
+| GET | `/api/om/auth-profiles` | Count of assigned vs unassigned structural authorization profiles from T77PQ mapped to T77UA |
 | GET | `/health` | DB ping |
 
 ## Business rules (and the choices behind them)
@@ -150,6 +158,14 @@ All GETs return `{ data, meta: { lastSyncedAt, stale, warning? } }`.
 5. **Dynamic Action Triggers (T588Z):** Groups logic blocks by `(INFTY, SUBTY, FNAME, OPERA)` ordered by `SEQNO`, filtering for `KENNZ = 'I'`. Extracts source infotype, subtype, trigger field, operation code, parsed 4-digit target infotype (`(?:INS|COP|MOD)[,( ]*(\d{4})`), and default values from any immediately following `KENNZ = 'W'` line.
 6. **Dynamic Actions by Operation (T588Z):** Groups distinct logic blocks by `OPERA` code (`00` Independent, `02` Change, `04` Create, `06` Change/Create, `08` Delete, `10` Change/Delete, `12` Create/Delete) with friendly descriptions.
 7. **Dynamic Action Routines (T588Z):** Filters `KENNZ = 'F'`, extracts routine name inside parentheses `\(([^)]+)\)` from `VINFO`, and calculates `COUNT(DISTINCT Routine)` and total routine executions per infotype.
+
+### OM (Organizational Management)
+1. **OM Object Types (T778O):** Non-null `OTYPE` values. Standard = does not start with `'9'`, Custom = starts with `'9'`.
+2. **OM Relationships (T778V):** Non-null `RELAT` values. Custom = starts with `'Z'`/`'z'` OR numeric range 900–999. Standard = neither.
+3. **OM Evaluation Paths (T778A):** Non-null `WEGID` values. Standard = does not start with `'Z'`/`'z'`, Custom = starts with `'Z'`/`'z'`.
+4. **Objects per Plan Version (HRP1000 + T778P):** Counts object instances grouped by `PLVAR`, joined to `T778P` for plan version name `PTEXT` ("NA" if unmapped).
+5. **Relationships per Plan Version (HRP1001 + T778P):** Counts relationship records grouped by `PLVAR`, joined to `T778P` for plan version name `PTEXT` ("NA" if unmapped).
+6. **Authorization Profiles (T77PQ + T77UA):** Deduplicated `PROFL` from `T77PQ`. Assigned = exists in `T77UA` (has at least one assigned user), Unassigned = not found in `T77UA`.
 
 ## Notes
 

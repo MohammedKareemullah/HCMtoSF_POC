@@ -28,10 +28,16 @@ Status date: 2026-11-08. Legend: **VERIFIED (mock)** = covered by the automated 
 | PA KPI 5: dynamic action triggers (KENNZ = 'I' with parsed target infotype & optional 'W' line defaults) | unit + e2e |
 | PA KPI 6: dynamic actions by OPERA operation code | unit + e2e |
 | PA KPI 7: dynamic action routines (KENNZ = 'F', routine name inside parentheses) | unit + e2e |
+| OM KPI 1: object types standard vs custom (starts with 9) from T778O | unit + e2e |
+| OM KPI 2: relationships standard vs custom (starts with Z or 900–999) from T778V | unit + e2e |
+| OM KPI 3: evaluation paths standard vs custom (starts with Z) from T778A | unit + e2e |
+| OM KPI 4: objects per plan version from HRP1000 + T778P | unit + e2e |
+| OM KPI 5: relationships per plan version from HRP1001 + T778P | unit + e2e |
+| OM KPI 6: assigned vs unassigned structural authorization profiles from T77PQ + T77UA | unit + e2e |
 | `/overview` aggregate, `/sync`, `/sync/status` | e2e |
 | Mock MCP server + synthetic dataset; `inspect:table` diagnostic | used by tests / scripts |
 
-Test totals: **18 unit pass** (on Node 22 without Postgres) + full e2e suites (`headcount.e2e.test.js`, `hcm_core.e2e.test.js`, `pa.e2e.test.js`).
+Test totals: **24 unit pass** (on Node 22 without Postgres) + full e2e suites (`headcount.e2e.test.js`, `hcm_core.e2e.test.js`, `pa.e2e.test.js`, `om.e2e.test.js`).
 
 ## 2. Implemented but UNVERIFIED against the real system
 

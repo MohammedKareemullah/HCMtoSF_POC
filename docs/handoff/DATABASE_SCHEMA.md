@@ -346,6 +346,68 @@ SELECT infty,
        string_agg(DISTINCT routine_name, ', ' ORDER BY routine_name) AS routine_names,
        COUNT(*)::int AS total_executions
   FROM valid_routines GROUP BY infty ORDER BY infty;
+
+-- ---------------------------------------------------------------------------
+-- OM module queries (src/modules/om/om.repository.js)
+-- ---------------------------------------------------------------------------
+
+-- 1. Standard vs custom OM Object Types from T778O
+SELECT
+  COUNT(*) FILTER (WHERE otype NOT LIKE '9%')::int AS std_om_objects,
+  COUNT(*) FILTER (WHERE otype LIKE '9%')::int AS custom_om_objects,
+  COUNT(*)::int AS total
+FROM (SELECT DISTINCT otype FROM om_t778o WHERE otype IS NOT NULL AND otype <> '') t;
+
+-- 2. Standard vs custom OM Relationships from T778V
+SELECT
+  COUNT(*) FILTER (WHERE NOT (upper(relat) LIKE 'Z%' OR (relat ~ '^[0-9]+$' AND relat::int BETWEEN 900 AND 999)))::int AS std_om_relationships,
+  COUNT(*) FILTER (WHERE upper(relat) LIKE 'Z%' OR (relat ~ '^[0-9]+$' AND relat::int BETWEEN 900 AND 999))::int AS custom_om_relationships,
+  COUNT(*)::int AS total
+FROM (SELECT DISTINCT relat FROM om_t778v WHERE relat IS NOT NULL AND relat <> '') t;
+
+-- 3. Standard vs custom OM Evaluation Paths from T778A
+SELECT
+  COUNT(*) FILTER (WHERE upper(wegid) NOT LIKE 'Z%')::int AS std_om_evaluation_paths,
+  COUNT(*) FILTER (WHERE upper(wegid) LIKE 'Z%')::int AS custom_om_evaluation_paths,
+  COUNT(*)::int AS total
+FROM (SELECT DISTINCT wegid FROM om_t778a WHERE wegid IS NOT NULL AND wegid <> '') t;
+
+-- 4. Objects per plan version from HRP1000 + T778P
+WITH ptexts AS (
+  SELECT DISTINCT ON (plvar) plvar, ptext FROM om_t778p WHERE plvar IS NOT NULL ORDER BY plvar
+),
+obj_counts AS (
+  SELECT plvar, COUNT(*)::int AS object_count
+  FROM om_hrp1000 WHERE plvar IS NOT NULL AND otype IS NOT NULL AND otype <> ''
+  GROUP BY plvar
+)
+SELECT o.plvar, COALESCE(p.ptext, 'NA') AS ptext, o.object_count AS no_of_objects
+FROM obj_counts o LEFT JOIN ptexts p ON p.plvar = o.plvar ORDER BY o.plvar;
+
+-- 5. Relationships per plan version from HRP1001 + T778P
+WITH ptexts AS (
+  SELECT DISTINCT ON (plvar) plvar, ptext FROM om_t778p WHERE plvar IS NOT NULL ORDER BY plvar
+),
+rel_counts AS (
+  SELECT plvar, COUNT(*)::int AS relationship_count
+  FROM om_hrp1001 WHERE plvar IS NOT NULL AND relat IS NOT NULL AND relat <> ''
+  GROUP BY plvar
+)
+SELECT r.plvar, COALESCE(p.ptext, 'NA') AS ptext, r.relationship_count AS no_of_relationships
+FROM rel_counts r LEFT JOIN ptexts p ON p.plvar = r.plvar ORDER BY r.plvar;
+
+-- 6. Authorization profiles: assigned vs unassigned from T77PQ + T77UA
+WITH pq AS (
+  SELECT DISTINCT profl FROM om_t77pq WHERE profl IS NOT NULL AND profl <> ''
+),
+ua AS (
+  SELECT DISTINCT profl FROM om_t77ua WHERE profl IS NOT NULL AND profl <> ''
+)
+SELECT
+  COUNT(*) FILTER (WHERE ua.profl IS NOT NULL)::int AS assigned_auth_profiles,
+  COUNT(*) FILTER (WHERE ua.profl IS NULL)::int AS unassigned_auth_profiles,
+  COUNT(*)::int AS total
+FROM pq LEFT JOIN ua ON ua.profl = pq.profl;
 ```
 
 Known SQL gotchas: the `ILIKE $4 || '%'` search does not escape `%`/`_` typed by the user; PERNR in SAP data is zero-padded (a prefix search needs the leading zeros).

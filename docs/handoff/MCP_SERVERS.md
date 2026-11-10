@@ -156,6 +156,19 @@ Unit tests cover each accepted shape and the failures (`tests/unit.test.js`).
 | `T588M` | `REPNA, DYNNR, ADYNR, DBILD` | `pa_t588m` |
 | `T588Z` | `INFTY, SUBTY, FNAME, OPERA, SEQNO, KENNZ, VINFO` | `pa_t588z` |
 
+### 4.8 Tables and fields requested by the OM module (`om.constants.js`)
+
+| SAP table | Fields requested (in order) | Staging table |
+|---|---|---|
+| `T778O` | `OTYPE` | `om_t778o` |
+| `T778V` | `RELAT` | `om_t778v` |
+| `T778A` | `WEGID` | `om_t778a` |
+| `HRP1000` | `OTYPE, PLVAR` | `om_hrp1000` |
+| `HRP1001` | `RELAT, PLVAR` | `om_hrp1001` |
+| `T778P` | `PLVAR, PTEXT` | `om_t778p` |
+| `T77PQ` | `PROFL` | `om_t77pq` |
+| `T77UA` | `UNAME, PROFL` | `om_t77ua` |
+
 Tables are fetched with concurrency `SAP_FETCH_CONCURRENCY` (default 2); each table is read fully into memory before loading.
 
 ---

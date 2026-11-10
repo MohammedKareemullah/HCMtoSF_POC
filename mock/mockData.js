@@ -167,9 +167,68 @@ const pa_t588z = [
   { INFTY: "0007", SUBTY: "", FNAME: "SCHKZ", OPERA: "06", SEQNO: "010", KENNZ: "F", VINFO: "RPTIME00(SHIFT_CHECK)" },
 ];
 
+// ---------------------------------------------------------------------------
+// OM Module: T778O, T778V, T778A, HRP1000, HRP1001, T778P, T77PQ, T77UA
+// ---------------------------------------------------------------------------
+
+const om_t778o = [
+  { OTYPE: "O" },
+  { OTYPE: "S" },
+  { OTYPE: "C" },
+  { OTYPE: "9A" },
+  { OTYPE: "9Z" },
+];
+
+const om_t778v = [
+  { RELAT: "002" },
+  { RELAT: "003" },
+  { RELAT: "A01" },
+  { RELAT: "Z01" },
+  { RELAT: "950" },
+];
+
+const om_t778a = [
+  { WEGID: "O-S-P" },
+  { WEGID: "SBES" },
+  { WEGID: "ZOM_PATH" },
+];
+
+const om_hrp1000 = [
+  { OTYPE: "O", PLVAR: "01" },
+  { OTYPE: "S", PLVAR: "01" },
+  { OTYPE: "C", PLVAR: "01" },
+  { OTYPE: "O", PLVAR: "02" },
+];
+
+const om_hrp1001 = [
+  { RELAT: "002", PLVAR: "01" },
+  { RELAT: "003", PLVAR: "01" },
+  { RELAT: "002", PLVAR: "02" },
+  { RELAT: "Z01", PLVAR: "02" },
+];
+
+const om_t778p = [
+  { PLVAR: "01", PTEXT: "Current plan" },
+  { PLVAR: "02", PTEXT: "Version 02" },
+];
+
+const om_t77pq = [
+  { PROFL: "ALL" },
+  { PROFL: "HR_MGR" },
+  { PROFL: "FIN_VIEW" },
+];
+
+const om_t77ua = [
+  { UNAME: "USER1", PROFL: "ALL" },
+  { UNAME: "USER2", PROFL: "ALL" },
+  { UNAME: "USER3", PROFL: "HR_MGR" },
+];
+
 export const MOCK_TABLES = {
   PA0000: pa0000, PA0001: pa0001, T500P: t500p, T001: t001, HRPY_RGDIR: hrpy,
   T582A: pa_t582a, T777D: t777d, T591A: t591a, T582S: t582s,
   T588M: pa_t588m, T588Z: pa_t588z,
-};
+  T778O: om_t778o, T778V: om_t778v, T778A: om_t778a,
+  HRP1000: om_hrp1000, HRP1001: om_hrp1001, T778P: om_t778p,
+  T77PQ: om_t77pq, T77UA: om_t77ua,
 };
