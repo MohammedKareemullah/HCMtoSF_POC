@@ -33,8 +33,8 @@ Two independent paths exist:
 | Config | `src/config/env.js`, `src/config/db.js` | All env vars with defaults; `pg` pool, date/int8 type parsers, `withTransaction` |
 | Migrations | `src/db/migrate.js`, `src/db/migrations/*.sql` | Create DB if missing, apply SQL files in order, track in `schema_migrations` |
 | MCP integration | `src/integrations/mcp/` | `mcpClient.js` (transport/auth), `sapTools.js` (tool wrappers), `sapTableReader.js` (paging + response normalisation) |
-| KPI modules | `src/modules/{headcount,hcm_core,pa,om}/` | constants, fetcher, loader, repository, processor, service, controller, routes per module |
-| Module registry | `src/modules/index.js` | One `app.use` line per KPI section (`/api/headcount`, `/api/hcm-core`, `/api/pa`, `/api/om`) |
+| KPI modules | `src/modules/{headcount,hcm_core,pa,om,pe}/` | constants, fetcher, loader, repository, processor, service, controller, routes per module |
+| Module registry | `src/modules/index.js` | One `app.use` line per KPI section (`/api/headcount`, `/api/hcm-core`, `/api/pa`, `/api/om`, `/api/pe`) |
 | Sync control | `src/shared/sync/` | `SyncCoordinator` (when to fetch), `syncRuns.repository.js` (history in `sync_runs`) |
 | Shared utilities | `src/shared/` | `AppError` family, `errorHandler`, `bulkInsert`, `mapLimit`, SAP value converters, country-name lookup + data |
 | Mock MCP | `mock/` | Stand-in for the real server; synthetic dataset |

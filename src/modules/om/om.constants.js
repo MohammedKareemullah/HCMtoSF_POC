@@ -53,11 +53,12 @@ export function getSourceTables() {
       ],
     },
     {
-      key: "t778p",
-      sap: "T778P",
-      pg: "om_t778p",
-      required: ["plvar"],
+      key: "t777p",
+      sap: "T777P",
+      pg: "om_t777p",
+      required: ["spras", "plvar"],
       columns: [
+        { sap: "SPRAS", name: "spras", type: "text" },
         { sap: "PLVAR", name: "plvar", type: "text" },
         { sap: "PTEXT", name: "ptext", type: "text" },
       ],

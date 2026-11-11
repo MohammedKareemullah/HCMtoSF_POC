@@ -2,9 +2,9 @@
 
 ## 1. Where work stopped
 
-**Last feature worked on:** implemented the fourth KPI section **om** (standard vs custom object types from T778O, relationships from T778V, evaluation paths from T778A, objects and relationships per plan version from HRP1000/HRP1001 + T778P, and assigned vs unassigned auth profiles from T77PQ + T77UA). Added migration `006_om.sql`, mock datasets in `mock/mockData.js`, unit tests in `tests/unit.test.js`, and e2e test suite in `tests/om.e2e.test.js`.
+**Last feature worked on:** implemented the fifth KPI section **pe** and schema corrections (payroll areas std vs custom from T549A, period parameters std vs custom from T549R, employees per payroll area from PA0001 with deduplicated PERNR, payroll areas per period parameter from T549A + T549N SPRAS='E', company features std vs custom from T549B/T549C, feature functions from T549D with number suffix removed, wage type summary std vs custom from T512W, wage types per country from T512W + T500T with SPRAS='E', active wage types within 24m across PA0008 LGA01–40, PA0014, PA0015, PA0267 mapped to T512T English text, and OM plan version endpoints updated to T777P with SPRAS='E'). Added migrations `007_pe.sql` and `008_t500t_t777p.sql`, mock datasets in `mock/mockData.js`, unit tests in `tests/unit.test.js` (33/33 pass), and e2e test suites.
 
-Previously implemented: **headcount** (migration 001/002), **hcm_core** (migration 003/004), and **pa** (migration 005).
+Previously implemented: **headcount** (migration 001/002), **hcm_core** (migration 003/004), **pa** (migration 005), and **om** (migration 006). Note that the owner mentioned more endpoints are yet to come in this PE section.
 
 After that, the owner asked only for this handoff documentation. There is **no half-written code**: nothing is in progress in the source tree.
 

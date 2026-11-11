@@ -31,13 +31,28 @@ Status date: 2026-11-08. Legend: **VERIFIED (mock)** = covered by the automated 
 | OM KPI 1: object types standard vs custom (starts with 9) from T778O | unit + e2e |
 | OM KPI 2: relationships standard vs custom (starts with Z or 900–999) from T778V | unit + e2e |
 | OM KPI 3: evaluation paths standard vs custom (starts with Z) from T778A | unit + e2e |
-| OM KPI 4: objects per plan version from HRP1000 + T778P | unit + e2e |
-| OM KPI 5: relationships per plan version from HRP1001 + T778P | unit + e2e |
+| OM KPI 4: objects per plan version from HRP1000 + T777P (SPRAS='E') | unit + e2e |
+| OM KPI 5: relationships per plan version from HRP1001 + T777P (SPRAS='E') | unit + e2e |
 | OM KPI 6: assigned vs unassigned structural authorization profiles from T77PQ + T77UA | unit + e2e |
+| PE KPI 1: payroll area summary (std vs custom starting with Z/Y from T549A) | unit + e2e |
+| PE KPI 2: period parameter summary (std vs custom 50–99 from T549R) | unit + e2e |
+| PE KPI 3: employees per payroll area (deduplicated PERNR from PA0001) | unit + e2e |
+| PE KPI 4: payroll areas per period parameter (T549A + T549N SPRAS='E') | unit + e2e |
+| PE KPI 5: company features summary (T549B std vs T549C custom) | unit + e2e |
+| PE KPI 6: feature functions from T549D (FUNID='P', number suffix removed) | unit + e2e |
+| PE KPI 7: wage type summary (custom starts with Z/Y or digit 0–9 from T512W) | unit + e2e |
+| PE KPI 8: wage types per country (T512W + T500T with SPRAS='E') | unit + e2e |
+| PE KPI 9: active wage types within 24m (PA0008, PA0014, PA0015, PA0267 + T512T) | unit + e2e |
+| PE KPI 10: payroll schema summary (std T52C0 vs custom T52C1) | unit + e2e |
+| PE KPI 11: payroll schema subschemas (FUNCO='COPY' from T52C0 / T52C1) | unit + e2e |
+| PE KPI 12: PCR summary (T52C5 CCYCL starting with Z, Y, 9 as custom) | unit + e2e |
+| PE KPI 13: payroll functions and operations summary (T52A0 OTYPE='FU' / 'OP') | unit + e2e |
+| PE KPI 14: custom functions and operations (T52A0 ONAME starting with Z or Y) | unit + e2e |
+| PE KPI 15: unused payroll areas (T599B absent from HRPY_RGDIR within last 24m) | unit + e2e |
 | `/overview` aggregate, `/sync`, `/sync/status` | e2e |
 | Mock MCP server + synthetic dataset; `inspect:table` diagnostic | used by tests / scripts |
 
-Test totals: **24 unit pass** (on Node 22 without Postgres) + full e2e suites (`headcount.e2e.test.js`, `hcm_core.e2e.test.js`, `pa.e2e.test.js`, `om.e2e.test.js`).
+Test totals: **42 unit pass** (on Node 22 without Postgres) + full e2e suites (`headcount.e2e.test.js`, `hcm_core.e2e.test.js`, `pa.e2e.test.js`, `om.e2e.test.js`, `pe.e2e.test.js`).
 
 ## 2. Implemented but UNVERIFIED against the real system
 

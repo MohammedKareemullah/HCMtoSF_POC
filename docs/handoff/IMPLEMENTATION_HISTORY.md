@@ -104,6 +104,28 @@ The turn-5 patch touched: `README.md`, `.env.example`, `src/config/env.js`, `src
      6. `GET /api/om/auth-profiles` (count assigned vs unassigned structural profiles from T77PQ in T77UA).
    - Added unit tests in `tests/unit.test.js` (24/24 pass) and e2e test suite `tests/om.e2e.test.js`.
 
+### 4.4 PE (Payroll Engine / Payroll) Module
+   - Owner requested 9 new endpoints for the PE module with note that more will follow:
+     1. `GET /api/pe/payroll-area-summary` (count std vs custom starts with Z/Y from T549A).
+     2. `GET /api/pe/period-parameter-summary` (count std vs custom 50–99 from T549R).
+     3. `GET /api/pe/employees-per-payroll-area` (count employees per payroll area from PA0001, deduplicating PERNR first).
+     4. `GET /api/pe/payroll-areas-per-period` (count ABKRS per PERMO from T549A mapped to T549N ATEXT with SPRAS='E').
+     5. `GET /api/pe/company-features-summary` (distinct NAMEN from T549B std vs T549C custom).
+     6. `GET /api/pe/feature-functions` (from T549D where FUNID='P', group by NAMEN, count functions, list function names with number suffixes removed).
+     7. `GET /api/pe/wage-type-summary` (custom starts with Z, Y, or digit 0–9 vs std from T512W).
+     8. `GET /api/pe/wage-types-per-country` (group T512W by MOLGA, count LGART, map to T500L LTEXT).
+     9. `GET /api/pe/active-wage-types` (active wage types within 24m across PA0008 LGA01–40, PA0014, PA0015, PA0267 mapped to T512T LGTXT with SPRSL='E').
+   - Created migration `007_pe.sql` with staging tables for all 14 SAP sources.
+   - Built 8 standard module files in `src/modules/pe/`.
+   - Updated `mockData.js` with synthetic data for all 14 tables and tested all 9 processor functions in `tests/unit.test.js` (33/33 pass) plus `tests/pe.e2e.test.js`.
+
+### 4.5 Schema Corrections: T500T (replacing T500L) and T777P (replacing T778P)
+   - Owner corrected source tables:
+     1. In PE module: for `wage-types-per-country`, read `SPRAS, MOLGA, LTEXT` from `T500T` (not `T500L`), filtered by `SPRAS = 'E'`.
+     2. In OM module: for `objects-per-plan-version` and `relationships-per-plan-version`, read `SPRAS, PLVAR, PTEXT` from `T777P` (not `T778P`), filtered by `SPRAS = 'E'`.
+   - Added migration `008_t500t_t777p.sql` creating `pe_t500t` and `om_t777p` with indexes.
+   - Updated `pe.constants.js`, `pe.repository.js`, `om.constants.js`, `om.repository.js`, `mockData.js`, tests, and documentation.
+
 ## 5. Bugs, errors and issues encountered, and resolutions
 
 | # | Issue | Resolution |

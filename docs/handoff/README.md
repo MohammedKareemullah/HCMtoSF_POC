@@ -38,8 +38,8 @@ Conventions used in every document:
 ## Snapshot facts
 
 - Documented state: 2026-11-10. Node.js 22 used for development (`engines.node >= 20`), PostgreSQL 16 used for testing.
-- Automated tests pass: 24 unit tests in `tests/unit.test.js`, plus e2e test suites (`headcount.e2e.test.js`, `hcm_core.e2e.test.js`, `pa.e2e.test.js`, `om.e2e.test.js`).
-- Four KPI sections exist: **headcount**, **hcm_core**, **pa**, and **om**.
+- Automated tests pass: 33 unit tests in `tests/unit.test.js`, plus e2e test suites (`headcount.e2e.test.js`, `hcm_core.e2e.test.js`, `pa.e2e.test.js`, `om.e2e.test.js`, `pe.e2e.test.js`).
+- Five KPI sections exist: **headcount**, **hcm_core**, **pa**, **om**, and **pe**.
 - The code has never been run against the real MCP server from the authoring environment (the sandbox could not reach it).
 - The repository was **not** a git repository in the authoring sandbox; the owner's local copy may differ. UNKNOWN.
 

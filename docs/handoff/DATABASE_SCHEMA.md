@@ -160,6 +160,12 @@ Indexes: `hc_pa0000_pernr_idx (pernr)`, `hc_pa0000_massn_idx (massn)`. Multiple 
 | `src/db/migrations/001_init.sql` | `sync_runs` + index; staging tables `hc_pa0000`, `hc_pa0001`, `hc_t500p` (with `werks`), `hc_t001`, `hc_hrpy_rgdir` + indexes; view `hc_employee_current` (joining T500P on `werks`) |
 | `src/db/migrations/002_t500p_persa.sql` | Owner correction: `ALTER TABLE hc_t500p RENAME COLUMN werks TO persa`; `ALTER INDEX hc_t500p_werks_idx RENAME TO hc_t500p_persa_idx`; `CREATE OR REPLACE VIEW hc_employee_current` joining `t5.persa = p1.werks` |
 | `src/db/migrations/003_hcm_core.sql` | HCM Core staging tables: `hcm_t582a`, `hcm_t591a`, `hcm_t582s` + indexes |
+| `src/db/migrations/004_t777d.sql` | HCM Core infotype table: `hcm_t777d` + indexes |
+| `src/db/migrations/005_pa.sql` | PA staging tables: `pa_t582a`, `pa_t777d`, `pa_t588m`, `pa_t588z` + indexes |
+| `src/db/migrations/006_om.sql` | OM staging tables: `om_t778o`, `om_t778v`, `om_t778a`, `om_hrp1000`, `om_hrp1001`, `om_t778p`, `om_t77pq`, `om_t77ua` + indexes |
+| `src/db/migrations/007_pe.sql` | PE staging tables: `pe_t549a`, `pe_t549r`, `pe_pa0001`, `pe_t549n`, `pe_t549b`, `pe_t549c`, `pe_t549d`, `pe_t512w`, `pe_t500l`, `pe_pa0008`, `pe_pa0014`, `pe_pa0015`, `pe_pa0267`, `pe_t512t` + indexes |
+| `src/db/migrations/008_t500t_t777p.sql` | Replace T500L with `pe_t500t` (`spras, molga, ltext`) and T778P with `om_t777p` (`spras, plvar, ptext`) + indexes |
+| `src/db/migrations/009_pe_ext.sql` | PE extension tables: `pe_t52c0`, `pe_t52c1`, `pe_t52c5`, `pe_t52a0`, `pe_t599b`, `pe_hrpy_rgdir` + indexes |
 
 Runner (`src/db/migrate.js`): ensures the database exists (on error `3D000` connects to `PG_ADMIN_DATABASE` and runs `CREATE DATABASE`), creates `schema_migrations`, then applies every
 not-yet-applied `*.sql` in filename order, **each in its own transaction**, recording it. Runs automatically on `npm start`; manually via `npm run db:setup`.
@@ -372,9 +378,9 @@ SELECT
   COUNT(*)::int AS total
 FROM (SELECT DISTINCT wegid FROM om_t778a WHERE wegid IS NOT NULL AND wegid <> '') t;
 
--- 4. Objects per plan version from HRP1000 + T778P
+-- 4. Objects per plan version from HRP1000 + T777P (SPRAS = 'E')
 WITH ptexts AS (
-  SELECT DISTINCT ON (plvar) plvar, ptext FROM om_t778p WHERE plvar IS NOT NULL ORDER BY plvar
+  SELECT DISTINCT ON (plvar) plvar, ptext FROM om_t777p WHERE spras = 'E' AND plvar IS NOT NULL ORDER BY plvar
 ),
 obj_counts AS (
   SELECT plvar, COUNT(*)::int AS object_count
@@ -384,9 +390,9 @@ obj_counts AS (
 SELECT o.plvar, COALESCE(p.ptext, 'NA') AS ptext, o.object_count AS no_of_objects
 FROM obj_counts o LEFT JOIN ptexts p ON p.plvar = o.plvar ORDER BY o.plvar;
 
--- 5. Relationships per plan version from HRP1001 + T778P
+-- 5. Relationships per plan version from HRP1001 + T777P (SPRAS = 'E')
 WITH ptexts AS (
-  SELECT DISTINCT ON (plvar) plvar, ptext FROM om_t778p WHERE plvar IS NOT NULL ORDER BY plvar
+  SELECT DISTINCT ON (plvar) plvar, ptext FROM om_t777p WHERE spras = 'E' AND plvar IS NOT NULL ORDER BY plvar
 ),
 rel_counts AS (
   SELECT plvar, COUNT(*)::int AS relationship_count
@@ -408,6 +414,157 @@ SELECT
   COUNT(*) FILTER (WHERE ua.profl IS NULL)::int AS unassigned_auth_profiles,
   COUNT(*)::int AS total
 FROM pq LEFT JOIN ua ON ua.profl = pq.profl;
+
+-- ---------------------------------------------------------------------------
+-- PE module queries
+-- ---------------------------------------------------------------------------
+
+-- 1. Standard vs custom payroll areas from T549A
+SELECT
+  COUNT(*) FILTER (WHERE upper(abkrs) NOT LIKE 'Z%' AND upper(abkrs) NOT LIKE 'Y%')::int AS std_payroll_areas,
+  COUNT(*) FILTER (WHERE upper(abkrs) LIKE 'Z%' OR upper(abkrs) LIKE 'Y%')::int AS custom_payroll_areas,
+  COUNT(*)::int AS total
+FROM (
+  SELECT DISTINCT abkrs FROM pe_t549a WHERE abkrs IS NOT NULL AND abkrs <> ''
+) t;
+
+-- 2. Standard vs custom period parameters from T549R
+SELECT
+  COUNT(*) FILTER (WHERE NOT (permo ~ '^[0-9]+$' AND permo::int BETWEEN 50 AND 99))::int AS std_period_parameters,
+  COUNT(*) FILTER (WHERE permo ~ '^[0-9]+$' AND permo::int BETWEEN 50 AND 99)::int AS custom_period_parameters,
+  COUNT(*)::int AS total
+FROM (
+  SELECT DISTINCT permo FROM pe_t549r WHERE permo IS NOT NULL AND permo <> ''
+) t;
+
+-- 3. Employees per payroll area from PA0001 (deduplicate PERNR)
+WITH dedup AS (
+  SELECT DISTINCT pernr, abkrs
+  FROM pe_pa0001
+  WHERE pernr IS NOT NULL AND pernr <> '' AND abkrs IS NOT NULL AND abkrs <> ''
+)
+SELECT abkrs, COUNT(DISTINCT pernr)::int AS no_of_employees
+FROM dedup GROUP BY abkrs ORDER BY abkrs;
+
+-- 4. Payroll areas per period parameter from T549A + T549N (SPRAS = 'E')
+WITH texts AS (
+  SELECT DISTINCT ON (permo) permo, atext FROM pe_t549n WHERE spras = 'E' AND permo IS NOT NULL ORDER BY permo
+),
+counts AS (
+  SELECT permo, COUNT(DISTINCT abkrs)::int AS no_of_payroll_areas
+  FROM pe_t549a WHERE permo IS NOT NULL AND permo <> '' AND abkrs IS NOT NULL AND abkrs <> ''
+  GROUP BY permo
+)
+SELECT c.permo, COALESCE(t.atext, 'NA') AS atext, c.no_of_payroll_areas
+FROM counts c LEFT JOIN texts t ON t.permo = c.permo ORDER BY c.permo;
+
+-- 5. Company features from T549B (std) + T549C (custom)
+WITH std AS (
+  SELECT COUNT(DISTINCT namen)::int AS std_count FROM pe_t549b WHERE namen IS NOT NULL AND namen <> ''
+),
+custom AS (
+  SELECT COUNT(DISTINCT namen)::int AS custom_count FROM pe_t549c WHERE namen IS NOT NULL AND namen <> ''
+)
+SELECT std.std_count AS std_company_features, custom.custom_count AS custom_company_features,
+       (std.std_count + custom.custom_count)::int AS total
+FROM std, custom;
+
+-- 6. Feature functions from T549D (FUNID = 'P')
+WITH cleaned AS (
+  SELECT DISTINCT namen, split_part(trim(funct), ' ', 1) AS func_name
+  FROM pe_t549d WHERE funid = 'P' AND namen IS NOT NULL AND namen <> '' AND funct IS NOT NULL AND funct <> ''
+)
+SELECT namen, COUNT(func_name)::int AS no_of_functions, array_agg(func_name ORDER BY func_name) AS functions
+FROM cleaned GROUP BY namen ORDER BY namen;
+
+-- 7. Wage type summary from T512W (custom = starts with Z/Y or digit 0-9)
+SELECT
+  COUNT(*) FILTER (WHERE NOT (upper(lgart) LIKE 'Z%' OR upper(lgart) LIKE 'Y%' OR lgart ~ '^[0-9]'))::int AS std_wage_types,
+  COUNT(*) FILTER (WHERE upper(lgart) LIKE 'Z%' OR upper(lgart) LIKE 'Y%' OR lgart ~ '^[0-9]')::int AS custom_wage_types,
+  COUNT(*)::int AS total
+FROM (
+  SELECT DISTINCT lgart FROM pe_t512w WHERE lgart IS NOT NULL AND lgart <> ''
+) t;
+
+-- 8. Wage types per country from T512W + T500T (SPRAS = 'E')
+WITH countries AS (
+  SELECT DISTINCT ON (molga) molga, ltext FROM pe_t500t WHERE spras = 'E' AND molga IS NOT NULL ORDER BY molga
+),
+wt_counts AS (
+  SELECT molga, COUNT(DISTINCT lgart)::int AS no_of_wage_types
+  FROM pe_t512w WHERE molga IS NOT NULL AND molga <> '' AND lgart IS NOT NULL AND lgart <> ''
+  GROUP BY molga
+)
+SELECT c.molga AS country_code, COALESCE(ct.ltext, 'NA') AS country_name, c.no_of_wage_types
+FROM wt_counts c LEFT JOIN countries ct ON ct.molga = c.molga ORDER BY c.molga;
+
+-- 9. Active wage types from PA0008, PA0014, PA0015, PA0267 (within 24m) + T512T
+WITH active_wts AS (
+  SELECT unnest(ARRAY[
+    lga01, lga02, lga03, lga04, lga05, lga06, lga07, lga08, lga09, lga10,
+    lga11, lga12, lga13, lga14, lga15, lga16, lga17, lga18, lga19, lga20,
+    lga21, lga22, lga23, lga24, lga25, lga26, lga27, lga28, lga29, lga30,
+    lga31, lga32, lga33, lga34, lga35, lga36, lga37, lga38, lga39, lga40
+  ]) AS lgart
+  FROM pe_pa0008 WHERE begda <= CURRENT_DATE AND endda >= (CURRENT_DATE - INTERVAL '24 months')
+  UNION
+  SELECT lgart FROM pe_pa0014 WHERE begda <= CURRENT_DATE AND endda >= (CURRENT_DATE - INTERVAL '24 months')
+  UNION
+  SELECT lgart FROM pe_pa0015 WHERE begda <= CURRENT_DATE AND endda >= (CURRENT_DATE - INTERVAL '24 months')
+  UNION
+  SELECT lgart FROM pe_pa0267 WHERE begda <= CURRENT_DATE AND endda >= (CURRENT_DATE - INTERVAL '24 months')
+),
+distinct_wts AS (
+  SELECT DISTINCT lgart FROM active_wts WHERE lgart IS NOT NULL AND lgart <> ''
+),
+texts AS (
+  SELECT DISTINCT ON (lgart) lgart, lgtxt FROM pe_t512t WHERE sprsl = 'E' AND lgart IS NOT NULL ORDER BY lgart
+)
+SELECT w.lgart AS wage_type, COALESCE(t.lgtxt, 'NA') AS wage_type_text
+FROM distinct_wts w LEFT JOIN texts t ON t.lgart = w.lgart ORDER BY w.lgart;
+
+-- 10. Payroll schema summary from T52C0 (standard) and T52C1 (custom)
+WITH std AS (
+  SELECT COUNT(DISTINCT schem)::int AS std_count FROM pe_t52c0 WHERE schem IS NOT NULL AND schem <> ''
+),
+custom AS (
+  SELECT COUNT(DISTINCT schem)::int AS custom_count FROM pe_t52c1 WHERE schem IS NOT NULL AND schem <> ''
+)
+SELECT std.std_count AS std_payroll_schemas, custom.custom_count AS custom_payroll_schemas,
+  (std.std_count + custom.custom_count)::int AS total FROM std, custom;
+
+-- 11. Payroll schema subschemas from T52C0 / T52C1 where FUNCO = 'COPY'
+SELECT schem, COUNT(DISTINCT parm1)::int AS no_of_subschemas
+FROM pe_t52c0 WHERE funco = 'COPY' AND schem IS NOT NULL AND schem <> '' AND parm1 IS NOT NULL AND parm1 <> ''
+GROUP BY schem ORDER BY schem;
+
+-- 12. PCR summary from T52C5 (custom starts with Z, Y, 9)
+SELECT
+  COUNT(*) FILTER (WHERE NOT (upper(ccycl) LIKE 'Z%' OR upper(ccycl) LIKE 'Y%' OR ccycl LIKE '9%'))::int AS std_pcr,
+  COUNT(*) FILTER (WHERE upper(ccycl) LIKE 'Z%' OR upper(ccycl) LIKE 'Y%' OR ccycl LIKE '9%')::int AS custom_pcr,
+  COUNT(*)::int AS total
+FROM (SELECT DISTINCT ccycl FROM pe_t52c5 WHERE ccycl IS NOT NULL AND ccycl <> '') t;
+
+-- 13. Payroll functions and operations summary from T52A0
+SELECT otype,
+  COUNT(*) FILTER (WHERE NOT (upper(oname) LIKE 'Z%' OR upper(oname) LIKE 'Y%'))::int AS std_count,
+  COUNT(*) FILTER (WHERE upper(oname) LIKE 'Z%' OR upper(oname) LIKE 'Y%')::int AS custom_count,
+  COUNT(*)::int AS total
+FROM pe_t52a0 WHERE otype IN ('FU', 'OP') AND oname IS NOT NULL AND oname <> '' GROUP BY otype;
+
+-- 14. Custom functions and operations from T52A0 (ONAME starts with Z or Y)
+SELECT otype, oname, lgtxt FROM pe_t52a0
+WHERE (upper(oname) LIKE 'Z%' OR upper(oname) LIKE 'Y%') AND oname IS NOT NULL AND oname <> ''
+ORDER BY otype, oname;
+
+-- 15. Unused payroll areas from T599B absent from recent HRPY_RGDIR runs (last 24m)
+WITH active AS (
+  SELECT DISTINCT abkrs FROM pe_hrpy_rgdir
+  WHERE fpend >= (CURRENT_DATE - INTERVAL '24 months') AND abkrs IS NOT NULL AND abkrs <> ''
+)
+SELECT t.abkrs, t.endda FROM pe_t599b t
+WHERE t.abkrs IS NOT NULL AND t.abkrs <> '' AND t.abkrs NOT IN (SELECT abkrs FROM active)
+ORDER BY t.abkrs;
 ```
 
 Known SQL gotchas: the `ILIKE $4 || '%'` search does not escape `%`/`_` typed by the user; PERNR in SAP data is zero-padded (a prefix search needs the leading zeros).

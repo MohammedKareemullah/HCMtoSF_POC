@@ -365,13 +365,13 @@ Sample response:
 
 | Method | Path | Purpose |
 |---|---|---|
-| POST | `/api/om/sync` | Force a sync of OM tables (T778O, T778V, T778A, HRP1000, HRP1001, T778P, T77PQ, T77UA) from SAP now |
+| POST | `/api/om/sync` | Force a sync of OM tables (T778O, T778V, T778A, HRP1000, HRP1001, T777P, T77PQ, T77UA) from SAP now |
 | GET | `/api/om/sync/status` | OM sync status |
 | GET | `/api/om/object-types` | Count of standard (not starting with 9) vs custom (starts with 9) OM object types from T778O |
 | GET | `/api/om/relationships` | Count of standard vs custom (starts with Z or 900–999) OM relationships from T778V |
 | GET | `/api/om/evaluation-paths` | Count of standard vs custom (starts with Z) OM evaluation paths from T778A |
-| GET | `/api/om/objects-per-plan-version` | Count of objects (OTYPE from HRP1000) grouped by plan version (PLVAR) with description (PTEXT from T778P) |
-| GET | `/api/om/relationships-per-plan-version` | Count of relationships (RELAT from HRP1001) grouped by plan version (PLVAR) with description (PTEXT from T778P) |
+| GET | `/api/om/objects-per-plan-version` | Count of objects (OTYPE from HRP1000) grouped by plan version (PLVAR) with description (PTEXT from T777P with SPRAS='E') |
+| GET | `/api/om/relationships-per-plan-version` | Count of relationships (RELAT from HRP1001) grouped by plan version (PLVAR) with description (PTEXT from T777P with SPRAS='E') |
 | GET | `/api/om/auth-profiles` | Count of assigned vs unassigned structural authorization profiles from T77PQ mapped to T77UA |
 
 #### `GET /api/om/object-types`
@@ -456,7 +456,249 @@ Sample response:
 }
 ```
 
-### 4.10 Errors
+### 4.10 KPI section 5: PE (Payroll Engine / Payroll)
+
+Sync control:
+- `POST /api/pe/sync` — trigger fetch of all 14 PE tables from SAP now (T549A, T549R, PA0001, T549N, T549B, T549C, T549D, T512W, T500T, PA0008, PA0014, PA0015, PA0267, T512T).
+- `GET /api/pe/sync/status` — returns `{ syncing, syncedSinceServerStart, lastSuccess, latestRun }`.
+
+#### `GET /api/pe/payroll-area-summary`
+Sample response:
+```json
+{
+  "data": {
+    "stdPayrollAreas": 4,
+    "customPayrollAreas": 2,
+    "total": 6
+  },
+  "meta": { "lastSyncedAt": "2026-11-10T12:30:00.000Z", "stale": false }
+}
+```
+
+#### `GET /api/pe/period-parameter-summary`
+Sample response:
+```json
+{
+  "data": {
+    "stdPeriodParameters": 3,
+    "customPeriodParameters": 2,
+    "total": 5
+  },
+  "meta": { "lastSyncedAt": "2026-11-10T12:30:00.000Z", "stale": false }
+}
+```
+
+#### `GET /api/pe/employees-per-payroll-area`
+Sample response:
+```json
+{
+  "data": {
+    "total": 4,
+    "items": [
+      { "payrollArea": "D1", "noOfEmployees": 2, "employeeCount": 2 },
+      { "payrollArea": "G1", "noOfEmployees": 2, "employeeCount": 2 },
+      { "payrollArea": "I1", "noOfEmployees": 4, "employeeCount": 4 },
+      { "payrollArea": "U1", "noOfEmployees": 5, "employeeCount": 5 }
+    ]
+  },
+  "meta": { "lastSyncedAt": "2026-11-10T12:30:00.000Z", "stale": false }
+}
+```
+
+#### `GET /api/pe/payroll-areas-per-period`
+Sample response:
+```json
+{
+  "data": {
+    "total": 4,
+    "items": [
+      { "permo": "01", "periodParameter": "01", "atext": "Monthly", "periodParameterText": "Monthly", "noOfPayrollAreas": 2 },
+      { "permo": "02", "periodParameter": "02", "atext": "Semi-Monthly", "periodParameterText": "Semi-Monthly", "noOfPayrollAreas": 2 },
+      { "permo": "50", "periodParameter": "50", "atext": "Bi-Weekly (Custom)", "periodParameterText": "Bi-Weekly (Custom)", "noOfPayrollAreas": 1 },
+      { "permo": "51", "periodParameter": "51", "atext": "Special Payroll", "periodParameterText": "Special Payroll", "noOfPayrollAreas": 1 }
+    ]
+  },
+  "meta": { "lastSyncedAt": "2026-11-10T12:30:00.000Z", "stale": false }
+}
+```
+
+#### `GET /api/pe/company-features-summary`
+Sample response:
+```json
+{
+  "data": {
+    "stdCompanyFeatures": 3,
+    "customCompanyFeatures": 2,
+    "total": 5
+  },
+  "meta": { "lastSyncedAt": "2026-11-10T12:30:00.000Z", "stale": false }
+}
+```
+
+#### `GET /api/pe/feature-functions`
+Sample response:
+```json
+{
+  "data": {
+    "total": 2,
+    "items": [
+      { "feature": "NUMKR", "noOfFunctions": 1, "functions": ["NUMGEN"] },
+      { "feature": "TARIF", "noOfFunctions": 2, "functions": ["CALC", "CHECK"] }
+    ]
+  },
+  "meta": { "lastSyncedAt": "2026-11-10T12:30:00.000Z", "stale": false }
+}
+```
+
+#### `GET /api/pe/wage-type-summary`
+Sample response:
+```json
+{
+  "data": {
+    "stdWageTypes": 3,
+    "customWageTypes": 5,
+    "total": 8
+  },
+  "meta": { "lastSyncedAt": "2026-11-10T12:30:00.000Z", "stale": false }
+}
+```
+
+#### `GET /api/pe/wage-types-per-country`
+Sample response:
+```json
+{
+  "data": {
+    "total": 3,
+    "items": [
+      { "countryCode": "10", "countryName": "USA", "noOfWageTypes": 4 },
+      { "countryCode": "40", "countryName": "India", "noOfWageTypes": 3 },
+      { "countryCode": "99", "countryName": "Other Countries", "noOfWageTypes": 1 }
+    ]
+  },
+  "meta": { "lastSyncedAt": "2026-11-10T12:30:00.000Z", "stale": false }
+}
+```
+
+#### `GET /api/pe/active-wage-types`
+Sample response:
+```json
+{
+  "data": {
+    "total": 5,
+    "items": [
+      { "wageType": "/001", "wageTypeText": "Valuation Basis 1" },
+      { "wageType": "1000", "wageTypeText": "Basic Salary" },
+      { "wageType": "1010", "wageTypeText": "Housing Allowance" },
+      { "wageType": "9000", "wageTypeText": "NA" },
+      { "wageType": "Z001", "wageTypeText": "Project Bonus" }
+    ]
+  },
+  "meta": { "lastSyncedAt": "2026-11-10T12:30:00.000Z", "stale": false }
+}
+```
+
+#### `GET /api/pe/payroll-schema-summary`
+Sample response:
+```json
+{
+  "data": {
+    "stdPayrollSchemas": 3,
+    "customPayrollSchemas": 2,
+    "total": 5
+  },
+  "meta": { "lastSyncedAt": "2026-11-10T12:30:00.000Z", "stale": false }
+}
+```
+
+#### `GET /api/pe/payroll-schema-subschemas`
+Sample response:
+```json
+{
+  "data": {
+    "std": {
+      "total": 3,
+      "items": [
+        { "schema": "XINN", "noOfSubschemas": 1 },
+        { "schema": "XMOD", "noOfSubschemas": 2 },
+        { "schema": "ZMOD", "noOfSubschemas": 1 }
+      ]
+    },
+    "custom": {
+      "total": 2,
+      "items": [
+        { "schema": "YCU1", "noOfSubschemas": 1 },
+        { "schema": "ZCU1", "noOfSubschemas": 2 }
+      ]
+    }
+  },
+  "meta": { "lastSyncedAt": "2026-11-10T12:30:00.000Z", "stale": false }
+}
+```
+
+#### `GET /api/pe/pcr-summary`
+Sample response:
+```json
+{
+  "data": {
+    "stdPcr": 3,
+    "customPcr": 3,
+    "total": 6
+  },
+  "meta": { "lastSyncedAt": "2026-11-10T12:30:00.000Z", "stale": false }
+}
+```
+
+#### `GET /api/pe/payroll-functions-operations-summary`
+Sample response:
+```json
+{
+  "data": {
+    "functions": {
+      "stdFunctions": 2,
+      "customFunctions": 2,
+      "total": 4
+    },
+    "operations": {
+      "stdOperations": 1,
+      "customOperations": 1,
+      "total": 2
+    }
+  },
+  "meta": { "lastSyncedAt": "2026-11-10T12:30:00.000Z", "stale": false }
+}
+```
+
+#### `GET /api/pe/custom-functions-operations`
+Sample response:
+```json
+{
+  "data": {
+    "total": 3,
+    "items": [
+      { "type": "Function", "name": "YCALC", "description": "Custom Function Y" },
+      { "type": "Function", "name": "ZTEST", "description": "Custom Function Z" },
+      { "type": "Operation", "name": "ZOPER", "description": "Custom Operation Z" }
+    ]
+  },
+  "meta": { "lastSyncedAt": "2026-11-10T12:30:00.000Z", "stale": false }
+}
+```
+
+#### `GET /api/pe/unused-payroll-areas`
+Sample response:
+```json
+{
+  "data": {
+    "total": 1,
+    "items": [
+      { "payrollArea": "X1", "endDate": "2023-12-31" }
+    ]
+  },
+  "meta": { "lastSyncedAt": "2026-11-10T12:30:00.000Z", "stale": false }
+}
+```
+
+### 4.11 Errors
 
 `{ "error": { "code": "<CODE>", "message": "...", "details"?: ... } }`
 

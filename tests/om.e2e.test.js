@@ -5,10 +5,10 @@
 // T778O: O, S, C (std=3); 9A, 9Z (custom=2) -> total 5
 // T778V: 002, 003, A01 (std=3); Z01, 950 (custom=2) -> total 5
 // T778A: O-S-P, SBES (std=2); ZOM_PATH (custom=1) -> total 3
-// HRP1000 + T778P:
+// HRP1000 + T777P (SPRAS = 'E'):
 //   "01": "Current plan" -> 3 objects
 //   "02": "Version 02"   -> 1 object
-// HRP1001 + T778P:
+// HRP1001 + T777P (SPRAS = 'E'):
 //   "01": "Current plan" -> 2 relationships
 //   "02": "Version 02"   -> 2 relationships
 // T77PQ + T77UA:
@@ -94,7 +94,7 @@ test("om: evaluation paths summary separates std vs custom (starts with Z)", asy
   assert.equal(data.total, 3);
 });
 
-test("om: objects per plan version aggregates HRP1000 and maps T778P PTEXT", async () => {
+test("om: objects per plan version aggregates HRP1000 and maps T777P PTEXT (SPRAS='E')", async () => {
   const { status, body } = await get("/api/om/objects-per-plan-version");
   assert.equal(status, 200);
 
@@ -113,7 +113,7 @@ test("om: objects per plan version aggregates HRP1000 and maps T778P PTEXT", asy
   });
 });
 
-test("om: relationships per plan version aggregates HRP1001 and maps T778P PTEXT", async () => {
+test("om: relationships per plan version aggregates HRP1001 and maps T777P PTEXT (SPRAS='E')", async () => {
   const { status, body } = await get("/api/om/relationships-per-plan-version");
   assert.equal(status, 200);
 

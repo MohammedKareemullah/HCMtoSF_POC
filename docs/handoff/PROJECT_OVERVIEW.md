@@ -107,7 +107,7 @@ These are the owner's requirements, preserved as faithfully as possible. Status 
 | Evaluation paths | `T778A` | `WEGID` |
 | Objects | `HRP1000` | `OTYPE`, `PLVAR` |
 | Object relationships | `HRP1001` | `RELAT`, `PLVAR` |
-| Plan version texts | `T778P` | `PLVAR`, `PTEXT` |
+| Plan version texts | `T777P` | `SPRAS`, `PLVAR`, `PTEXT` |
 | Auth profile definitions | `T77PQ` | `PROFL` |
 | User profile assignments | `T77UA` | `UNAME`, `PROFL` |
 
@@ -117,11 +117,44 @@ These are the owner's requirements, preserved as faithfully as possible. Status 
 | 1 | From `T778O`: remove blank/null `OTYPE`. Count standard (does not start with '9') and custom (starts with '9'). | `COUNT(*) FILTER` in SQL | `GET /api/om/object-types` | IMPLEMENTED, VERIFIED (mock) |
 | 2 | From `T778V`: remove blank/null `RELAT`. Count standard vs custom (starts with 'Z' or 900–999). | `COUNT(*) FILTER` in SQL with regex | `GET /api/om/relationships` | IMPLEMENTED, VERIFIED (mock) |
 | 3 | From `T778A`: remove blank/null `WEGID`. Count standard vs custom (starts with 'Z'). | `COUNT(*) FILTER` in SQL | `GET /api/om/evaluation-paths` | IMPLEMENTED, VERIFIED (mock) |
-| 4 | From `HRP1000` + `T778P`: count `OTYPE` grouped by `PLVAR`, mapped to `PTEXT`. | `COUNT(*)` grouped by `PLVAR` with left join to `T778P` | `GET /api/om/objects-per-plan-version` | IMPLEMENTED, VERIFIED (mock) |
-| 5 | From `HRP1001` + `T778P`: count `RELAT` grouped by `PLVAR`, mapped to `PTEXT`. | `COUNT(*)` grouped by `PLVAR` with left join to `T778P` | `GET /api/om/relationships-per-plan-version` | IMPLEMENTED, VERIFIED (mock) |
+| 4 | From `HRP1000` + `T777P`: count `OTYPE` grouped by `PLVAR`, mapped to `PTEXT` (`SPRAS = 'E'`). | `COUNT(*)` grouped by `PLVAR` with left join to `T777P` | `GET /api/om/objects-per-plan-version` | IMPLEMENTED, VERIFIED (mock) |
+| 5 | From `HRP1001` + `T777P`: count `RELAT` grouped by `PLVAR`, mapped to `PTEXT` (`SPRAS = 'E'`). | `COUNT(*)` grouped by `PLVAR` with left join to `T777P` | `GET /api/om/relationships-per-plan-version` | IMPLEMENTED, VERIFIED (mock) |
 | 6 | From `T77PQ` + `T77UA`: map `T77PQ-PROFL = T77UA-PROFL` to count assigned vs unassigned auth profiles. | `COUNT(*) FILTER` with left join to `T77UA` | `GET /api/om/auth-profiles` | IMPLEMENTED, VERIFIED (mock) |
 
-## 7. Main features and capabilities
+## 7. Functional requirements (KPI section 5: PE - Payroll Engine / Payroll)
+
+### 7.1 Required source data
+| Purpose | SAP table | Fields read |
+|---|---|---|
+| Payroll areas & periods | `T549A` | `ABKRS`, `PERMO` |
+| Period parameters | `T549R` | `PERMO` |
+| Employee payroll area | `PA0001` | `PERNR`, `ABKRS` |
+| Period parameter texts | `T549N` | `SPRAS`, `PERMO`, `ATEXT` |
+| Standard company features | `T549B` | `NAMEN` |
+| Custom company features | `T549C` | `NAMEN` |
+| Feature functions | `T549D` | `NAMEN`, `FUNID`, `FUNCT` |
+| Wage types | `T512W` | `MOLGA`, `LGART` |
+| Country names | `T500T` | `SPRAS`, `MOLGA`, `LTEXT` |
+| Basic pay wage types | `PA0008` | `BEGDA`, `ENDDA`, `LGA01` through `LGA40` |
+| Recurring payments | `PA0014` | `BEGDA`, `ENDDA`, `LGART` |
+| Additional payments | `PA0015` | `BEGDA`, `ENDDA`, `LGART` |
+| Off-cycle payments | `PA0267` | `BEGDA`, `ENDDA`, `LGART` |
+| Wage type texts | `T512T` | `SPRSL`, `LGART`, `LGTXT` |
+
+### 7.2 Required calculations
+| # | Requirement | Implementation | Endpoint | Status |
+|---|---|---|---|---|
+| 1 | From `T549A`: count custom payroll areas (starts with Z or Y) vs standard payroll areas. | `COUNT(*) FILTER` in SQL | `GET /api/pe/payroll-area-summary` | IMPLEMENTED, VERIFIED (mock) |
+| 2 | From `T549R`: count custom period parameters (numeric 50–99) vs standard period parameters. | `COUNT(*) FILTER` in SQL | `GET /api/pe/period-parameter-summary` | IMPLEMENTED, VERIFIED (mock) |
+| 3 | From `PA0001`: deduplicate `PERNR` first, count employees under each payroll area. | Deduplicate `(pernr, abkrs)` then `COUNT(DISTINCT pernr)` grouped by `abkrs` | `GET /api/pe/employees-per-payroll-area` | IMPLEMENTED, VERIFIED (mock) |
+| 4 | From `T549A` + `T549N`: count payroll areas per period parameter, join `ATEXT` where `SPRAS = 'E'`. | `COUNT(DISTINCT abkrs)` grouped by `permo`, left join `pe_t549n` | `GET /api/pe/payroll-areas-per-period` | IMPLEMENTED, VERIFIED (mock) |
+| 5 | From `T549B` (std) + `T549C` (custom): count distinct `NAMEN` company features for each. | `COUNT(DISTINCT namen)` from each staging table | `GET /api/pe/company-features-summary` | IMPLEMENTED, VERIFIED (mock) |
+| 6 | From `T549D` where `FUNID = 'P'`: group by `NAMEN`, count distinct functions, list function names with number suffix removed. | `split_part(trim(funct), ' ', 1)`, `COUNT`, `array_agg` | `GET /api/pe/feature-functions` | IMPLEMENTED, VERIFIED (mock) |
+| 7 | From `T512W`: count custom wage types (starts with Z, Y, or digit 0–9) vs standard wage types. | `COUNT(*) FILTER` in SQL | `GET /api/pe/wage-type-summary` | IMPLEMENTED, VERIFIED (mock) |
+| 8 | From `T512W` + `T500T`: group by `MOLGA`, count wage types, map country name from `T500T` (`SPRAS = 'E'`). | `COUNT(DISTINCT lgart)` grouped by `molga`, left join `pe_t500t` | `GET /api/pe/wage-types-per-country` | IMPLEMENTED, VERIFIED (mock) |
+| 9 | From `PA0008` (LGA01–40), `PA0014`, `PA0015`, `PA0267` within 24m: distinct active wage types mapped to `T512T` `LGTXT` (`SPRSL = 'E'`). | `unnest(ARRAY[...])` + `UNION` across tables with date filter, left join `pe_t512t` | `GET /api/pe/active-wage-types` | IMPLEMENTED, VERIFIED (mock) |
+
+## 8. Main features and capabilities
 
 - Per-KPI-section module structure (routes → controller → service → repository → processor), staging tables per section.
 - SAP access via a custom MCP client: HS256 JWT carrying SAP credentials, JSON-RPC `tools/call`, JSON or SSE responses, paging with `rowCount`/`rowSkips`, tolerant row parsing.

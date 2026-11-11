@@ -34,6 +34,23 @@ import {
   buildRelationshipsPerPlanVersion,
   buildAuthProfilesSummary,
 } from "../src/modules/om/om.processor.js";
+import {
+  buildPayrollAreaSummary,
+  buildPeriodParameterSummary,
+  buildEmployeesPerPayrollArea,
+  buildPayrollAreasPerPeriod,
+  buildCompanyFeaturesSummary,
+  buildFeatureFunctions,
+  buildWageTypeSummary,
+  buildWageTypesPerCountry,
+  buildActiveWageTypes,
+  buildPayrollSchemaSummary,
+  buildPayrollSchemaSubschemas,
+  buildPcrSummary,
+  buildPayrollFunctionsOperationsSummary,
+  buildCustomFunctionsOperations,
+  buildUnusedPayrollAreas,
+} from "../src/modules/pe/pe.processor.js";
 
 test("sapDate converts SAP dates and rejects junk", () => {
   assert.equal(sapDate("20240229"), "2024-02-29");
@@ -420,4 +437,231 @@ test("buildAuthProfilesSummary calculates assigned vs unassigned structural prof
   assert.equal(result.assignedAuthProfiles, 2);
   assert.equal(result.unassignedAuthProfiles, 1);
   assert.equal(result.total, 3);
+});
+
+test("buildPayrollAreaSummary separates standard vs custom (starts with Z or Y) payroll areas", () => {
+  const rows = [{ abkrs: "U1" }, { abkrs: "I1" }, { abkrs: "Z1" }, { abkrs: "Y1" }];
+  const result = buildPayrollAreaSummary(rows);
+  assert.equal(result.stdPayrollAreas, 2);
+  assert.equal(result.customPayrollAreas, 2);
+  assert.equal(result.total, 4);
+
+  const preAgg = buildPayrollAreaSummary({ std_payroll_areas: 4, custom_payroll_areas: 2, total: 6 });
+  assert.equal(preAgg.stdPayrollAreas, 4);
+  assert.equal(preAgg.customPayrollAreas, 2);
+  assert.equal(preAgg.total, 6);
+});
+
+test("buildPeriodParameterSummary separates standard vs custom (50-99) period parameters", () => {
+  const rows = [{ permo: "01" }, { permo: "02" }, { permo: "50" }, { permo: "99" }];
+  const result = buildPeriodParameterSummary(rows);
+  assert.equal(result.stdPeriodParameters, 2);
+  assert.equal(result.customPeriodParameters, 2);
+  assert.equal(result.total, 4);
+
+  const preAgg = buildPeriodParameterSummary({ std_period_parameters: 3, custom_period_parameters: 2, total: 5 });
+  assert.equal(preAgg.stdPeriodParameters, 3);
+  assert.equal(preAgg.customPeriodParameters, 2);
+  assert.equal(preAgg.total, 5);
+});
+
+test("buildEmployeesPerPayrollArea deduplicates PERNR and counts employees per payroll area", () => {
+  const rows = [
+    { pernr: "1001", abkrs: "U1" },
+    { pernr: "1001", abkrs: "U1" }, // duplicate PERNR
+    { pernr: "1002", abkrs: "I1" },
+  ];
+  const result = buildEmployeesPerPayrollArea(rows);
+  assert.equal(result.total, 2);
+  assert.deepEqual(result.items, [
+    { payrollArea: "U1", noOfEmployees: 1 },
+    { payrollArea: "I1", noOfEmployees: 1 },
+  ]);
+
+  const preAgg = buildEmployeesPerPayrollArea([{ abkrs: "U1", no_of_employees: 5 }]);
+  assert.equal(preAgg.total, 1);
+  assert.equal(preAgg.items[0].payrollArea, "U1");
+  assert.equal(preAgg.items[0].noOfEmployees, 5);
+});
+
+test("buildPayrollAreasPerPeriod formats PERMO, text, and payroll area count", () => {
+  const rows = [
+    { permo: "01", atext: "Monthly", no_of_payroll_areas: 2 },
+    { permo: "02", atext: "Semi-Monthly", no_of_payroll_areas: 2 },
+  ];
+  const result = buildPayrollAreasPerPeriod(rows);
+  assert.equal(result.total, 2);
+  assert.equal(result.items[0].periodParameter, "01");
+  assert.equal(result.items[0].periodParameterText, "Monthly");
+  assert.equal(result.items[0].noOfPayrollAreas, 2);
+});
+
+test("buildCompanyFeaturesSummary counts distinct standard (T549B) and custom (T549C) features", () => {
+  const input = {
+    t549b: [{ namen: "TARIF" }, { namen: "NUMKR" }, { namen: "LGMST" }],
+    t549c: [{ namen: "ZTARF" }, { namen: "ZNUMK" }],
+  };
+  const result = buildCompanyFeaturesSummary(input);
+  assert.equal(result.stdCompanyFeatures, 3);
+  assert.equal(result.customCompanyFeatures, 2);
+  assert.equal(result.total, 5);
+});
+
+test("buildFeatureFunctions groups functions under features and drops number suffixes", () => {
+  const rows = [
+    { namen: "TARIF", funid: "P", funct: "CALC 01" },
+    { namen: "TARIF", funid: "P", funct: "CALC 02" }, // collapses to CALC
+    { namen: "TARIF", funid: "P", funct: "CHECK 10" },
+    { namen: "NUMKR", funid: "P", funct: "NUMGEN 01" },
+    { namen: "LGMST", funid: "D", funct: "IGNORE 01" }, // not FUNID 'P'
+  ];
+  const result = buildFeatureFunctions(rows);
+  assert.equal(result.total, 2);
+  assert.deepEqual(result.items, [
+    { feature: "NUMKR", noOfFunctions: 1, functions: ["NUMGEN"] },
+    { feature: "TARIF", noOfFunctions: 2, functions: ["CALC", "CHECK"] },
+  ]);
+});
+
+test("buildWageTypeSummary categorizes custom (starts with Z, Y, or digit 0-9) vs standard wage types", () => {
+  const rows = [
+    { lgart: "1000" }, // custom (starts with digit 1)
+    { lgart: "Z001" }, // custom (starts with Z)
+    { lgart: "Y001" }, // custom (starts with Y)
+    { lgart: "/001" }, // standard
+    { lgart: "M001" }, // standard
+  ];
+  const result = buildWageTypeSummary(rows);
+  assert.equal(result.stdWageTypes, 2);
+  assert.equal(result.customWageTypes, 3);
+  assert.equal(result.total, 5);
+});
+
+test("buildWageTypesPerCountry formats country code, country name, and wage type counts", () => {
+  const rows = [
+    { country_code: "10", country_name: "USA", no_of_wage_types: 4 },
+    { country_code: "40", country_name: "India", no_of_wage_types: 3 },
+  ];
+  const result = buildWageTypesPerCountry(rows);
+  assert.equal(result.total, 2);
+  assert.equal(result.items[0].countryCode, "10");
+  assert.equal(result.items[0].countryName, "USA");
+  assert.equal(result.items[0].noOfWageTypes, 4);
+});
+
+test("buildActiveWageTypes formats active wage types and descriptions", () => {
+  const rows = [
+    { wage_type: "1000", wage_type_text: "Basic Salary" },
+    { wage_type: "9000", wage_type_text: "NA" },
+  ];
+  const result = buildActiveWageTypes(rows);
+  assert.equal(result.total, 2);
+  assert.deepEqual(result.items, [
+    { wageType: "1000", wageTypeText: "Basic Salary" },
+    { wageType: "9000", wageTypeText: "NA" },
+  ]);
+});
+
+// ---------------------------------------------------------------------------
+// EP10-EP15: PE processor unit tests
+// ---------------------------------------------------------------------------
+
+test("buildPayrollSchemaSummary returns std, custom, and total schema counts", () => {
+  // Input from SQL: { std_payroll_schemas: 3, custom_payroll_schemas: 2, total: 5 }
+  // T52C0 distinct: XMOD, ZMOD, XINN -> 3; T52C1 distinct: ZCU1, YCU1 -> 2
+  const input = { std_payroll_schemas: 3, custom_payroll_schemas: 2, total: 5 };
+  const result = buildPayrollSchemaSummary(input);
+  assert.equal(result.stdPayrollSchemas, 3);
+  assert.equal(result.customPayrollSchemas, 2);
+  assert.equal(result.total, 5);
+});
+
+test("buildPayrollSchemaSummary returns zeros on empty input", () => {
+  const result = buildPayrollSchemaSummary({});
+  assert.equal(result.stdPayrollSchemas, 0);
+  assert.equal(result.customPayrollSchemas, 0);
+  assert.equal(result.total, 0);
+});
+
+test("buildPayrollSchemaSubschemas groups subschemas under std and custom schemas", () => {
+  // std (T52C0 FUNCO='COPY'): XINN->1, XMOD->2, ZMOD->1
+  // custom (T52C1 FUNCO='COPY'): YCU1->1, ZCU1->2
+  const input = {
+    std: [
+      { schem: "XINN", no_of_subschemas: 1 },
+      { schem: "XMOD", no_of_subschemas: 2 },
+      { schem: "ZMOD", no_of_subschemas: 1 },
+    ],
+    custom: [
+      { schem: "YCU1", no_of_subschemas: 1 },
+      { schem: "ZCU1", no_of_subschemas: 2 },
+    ],
+  };
+  const result = buildPayrollSchemaSubschemas(input);
+  assert.equal(result.std.total, 3);
+  assert.equal(result.std.items[1].schema, "XMOD");
+  assert.equal(result.std.items[1].noOfSubschemas, 2);
+  assert.equal(result.custom.total, 2);
+  assert.equal(result.custom.items[1].schema, "ZCU1");
+  assert.equal(result.custom.items[1].noOfSubschemas, 2);
+});
+
+test("buildPcrSummary categorizes std vs custom PCR (starts with Z, Y, or 9)", () => {
+  // T52C5 distinct: X010, X020, M001 -> std=3; Z010, Y020, 9001 -> custom=3; total=6
+  const input = { std_pcr: 3, custom_pcr: 3, total: 6 };
+  const result = buildPcrSummary(input);
+  assert.equal(result.stdPcr, 3);
+  assert.equal(result.customPcr, 3);
+  assert.equal(result.total, 6);
+});
+
+test("buildPayrollFunctionsOperationsSummary splits FU and OP into separate summaries", () => {
+  // FU: ADVAL + MULTI = std=2, ZTEST + YCALC = custom=2, total=4
+  // OP: ADDWT = std=1, ZOPER = custom=1, total=2
+  const rows = [
+    { otype: "FU", std_count: 2, custom_count: 2, total: 4 },
+    { otype: "OP", std_count: 1, custom_count: 1, total: 2 },
+  ];
+  const result = buildPayrollFunctionsOperationsSummary(rows);
+  assert.equal(result.functions.stdFunctions, 2);
+  assert.equal(result.functions.customFunctions, 2);
+  assert.equal(result.functions.total, 4);
+  assert.equal(result.operations.stdOperations, 1);
+  assert.equal(result.operations.customOperations, 1);
+  assert.equal(result.operations.total, 2);
+});
+
+test("buildPayrollFunctionsOperationsSummary returns zeros when OTYPE not present", () => {
+  const result = buildPayrollFunctionsOperationsSummary([]);
+  assert.equal(result.functions.stdFunctions, 0);
+  assert.equal(result.operations.stdOperations, 0);
+});
+
+test("buildCustomFunctionsOperations labels FU as Function and OP as Operation", () => {
+  // Expected: YCALC (Function), ZOPER (Operation), ZTEST (Function) - ordered by otype then oname
+  const rows = [
+    { otype: "FU", oname: "YCALC", lgtxt: "Custom Function Y" },
+    { otype: "FU", oname: "ZTEST", lgtxt: "Custom Function Z" },
+    { otype: "OP", oname: "ZOPER", lgtxt: "Custom Operation Z" },
+  ];
+  const result = buildCustomFunctionsOperations(rows);
+  assert.equal(result.total, 3);
+  assert.deepEqual(result.items, [
+    { type: "Function", name: "YCALC", description: "Custom Function Y" },
+    { type: "Function", name: "ZTEST", description: "Custom Function Z" },
+    { type: "Operation", name: "ZOPER", description: "Custom Operation Z" },
+  ]);
+});
+
+test("buildUnusedPayrollAreas formats payroll area and description from DB rows", () => {
+  const rows = [
+    { abkrs: "Z1", atext: "Custom Bi-Weekly" },
+    { abkrs: "Y1", atext: "Special Payroll" },
+  ];
+  const result = buildUnusedPayrollAreas(rows);
+  assert.equal(result.total, 2);
+  assert.deepEqual(result.items, [
+    { payrollArea: "Z1", payrollAreaDesc: "Custom Bi-Weekly" },
+    { payrollArea: "Y1", payrollAreaDesc: "Special Payroll" },
+  ]);
 });

@@ -60,14 +60,16 @@ const t001 = [
 ];
 
 // HRPY_RGDIR: PERNR, ABKRS, FPPER, SRTZA  -- months present: 2024-01, -02, -03 and -06 (a gap on purpose)
+// FPEND is added so the PE module (which fetches ABKRS + FPEND) can also use this mock table.
+// Headcount ignores FPEND; PE ignores PERNR/FPPER/SRTZA. The mock validates only requested fields.
 const hrpy = [
-  [1001, "U1", "202401", "A"], [1002, "I1", "202401", "A"], [1003, "U1", "202401", "A"], [1004, "G1", "202401", "A"],
-  [1001, "U1", "202401", "P"], // old (superseded) result for an employee already counted
-  [1001, "U1", "202402", "A"], [1002, "I1", "202402", "A"], [1003, "U1", "202402", "A"], [1004, "G1", "202402", "A"],
-  [1005, "I1", "202402", "A"],
-  [1001, "U1", "202403", "A"], [1002, "I1", "202403", "A"], [1005, "I1", "202403", "A"], [1006, "D1", "202403", "A"],
-  [1001, "U1", "202406", "A"], [1006, "D1", "202406", "A"], [1007, "G1", "202406", "A"],
-].map(([n, ABKRS, FPPER, SRTZA]) => ({ PERNR: p(n), ABKRS, FPPER, SRTZA }));
+  [1001, "U1", "202401", "A", "20251231"], [1002, "I1", "202401", "A", "20251231"], [1003, "U1", "202401", "A", "20251231"], [1004, "G1", "202401", "A", "20251231"],
+  [1001, "U1", "202401", "P", "20251231"], // old (superseded) result for an employee already counted
+  [1001, "U1", "202402", "A", "20251231"], [1002, "I1", "202402", "A", "20251231"], [1003, "U1", "202402", "A", "20251231"], [1004, "G1", "202402", "A", "20251231"],
+  [1005, "I1", "202402", "A", "20251231"],
+  [1001, "U1", "202403", "A", "20251231"], [1002, "I1", "202403", "A", "20251231"], [1005, "I1", "202403", "A", "20251231"], [1006, "D1", "202403", "A", "20251231"],
+  [1001, "U1", "202406", "A", "20251231"], [1006, "D1", "202406", "A", "20251231"], [1007, "G1", "202406", "A", "20251231"],
+].map(([n, ABKRS, FPPER, SRTZA, FPEND]) => ({ PERNR: p(n), ABKRS, FPPER, SRTZA, FPEND }));
 
 // ---------------------------------------------------------------------------
 // HCM Core: T777D, T591A, T582S synthetic data
@@ -207,9 +209,10 @@ const om_hrp1001 = [
   { RELAT: "Z01", PLVAR: "02" },
 ];
 
-const om_t778p = [
-  { PLVAR: "01", PTEXT: "Current plan" },
-  { PLVAR: "02", PTEXT: "Version 02" },
+const om_t777p = [
+  { SPRAS: "E", PLVAR: "01", PTEXT: "Current plan" },
+  { SPRAS: "E", PLVAR: "02", PTEXT: "Version 02" },
+  { SPRAS: "D", PLVAR: "01", PTEXT: "Aktueller Plan" },
 ];
 
 const om_t77pq = [
@@ -224,11 +227,199 @@ const om_t77ua = [
   { UNAME: "USER3", PROFL: "HR_MGR" },
 ];
 
+// ---------------------------------------------------------------------------
+// PE Module: T549A, T549R, T549N, T549B, T549C, T549D, T512W, T500L,
+//            PA0008, PA0014, PA0015, PA0267, T512T synthetic data
+// (Note: PA0001 is already defined above as pa0001)
+// ---------------------------------------------------------------------------
+
+const pe_t549a = [
+  { ABKRS: "U1", PERMO: "01" },
+  { ABKRS: "I1", PERMO: "01" },
+  { ABKRS: "G1", PERMO: "02" },
+  { ABKRS: "D1", PERMO: "02" },
+  { ABKRS: "Z1", PERMO: "50" },
+  { ABKRS: "Y1", PERMO: "51" },
+];
+
+const pe_t549r = [
+  { PERMO: "01" },
+  { PERMO: "02" },
+  { PERMO: "03" },
+  { PERMO: "50" },
+  { PERMO: "51" },
+];
+
+const pe_t549n = [
+  { SPRAS: "E", PERMO: "01", ATEXT: "Monthly" },
+  { SPRAS: "E", PERMO: "02", ATEXT: "Semi-Monthly" },
+  { SPRAS: "E", PERMO: "03", ATEXT: "Weekly" },
+  { SPRAS: "E", PERMO: "50", ATEXT: "Bi-Weekly (Custom)" },
+  { SPRAS: "E", PERMO: "51", ATEXT: "Special Payroll" },
+  { SPRAS: "D", PERMO: "01", ATEXT: "Monatlich" },
+];
+
+const pe_t549b = [
+  { NAMEN: "TARIF" },
+  { NAMEN: "NUMKR" },
+  { NAMEN: "LGMST" },
+];
+
+const pe_t549c = [
+  { NAMEN: "ZTARF" },
+  { NAMEN: "ZNUMK" },
+];
+
+const pe_t549d = [
+  { NAMEN: "TARIF", FUNID: "P", FUNCT: "CALC 01" },
+  { NAMEN: "TARIF", FUNID: "P", FUNCT: "CALC 02" },
+  { NAMEN: "TARIF", FUNID: "P", FUNCT: "CHECK 10" },
+  { NAMEN: "NUMKR", FUNID: "P", FUNCT: "NUMGEN 01" },
+  { NAMEN: "LGMST", FUNID: "D", FUNCT: "IGNORE 01" },
+];
+
+const pe_t512w = [
+  { MOLGA: "10", LGART: "1000" },
+  { MOLGA: "10", LGART: "1010" },
+  { MOLGA: "10", LGART: "/001" },
+  { MOLGA: "10", LGART: "M001" },
+  { MOLGA: "40", LGART: "Z001" },
+  { MOLGA: "40", LGART: "Y001" },
+  { MOLGA: "40", LGART: "/101" },
+  { MOLGA: "99", LGART: "9000" },
+];
+
+const pe_t500t = [
+  { SPRAS: "E", MOLGA: "10", LTEXT: "USA" },
+  { SPRAS: "E", MOLGA: "40", LTEXT: "India" },
+  { SPRAS: "E", MOLGA: "99", LTEXT: "Other Countries" },
+  { SPRAS: "D", MOLGA: "10", LTEXT: "Vereinigte Staaten" },
+];
+
+function makeLgaRow(begda, endda, lgas = {}) {
+  const row = { BEGDA: begda, ENDDA: endda };
+  for (let i = 1; i <= 40; i++) {
+    const key = `LGA${String(i).padStart(2, "0")}`;
+    row[key] = lgas[key] ?? "";
+  }
+  return row;
+}
+
+const pe_pa0008 = [
+  makeLgaRow("20240101", "99991231", { LGA01: "1000", LGA02: "1010" }),
+  makeLgaRow("20200101", "20210101", { LGA01: "OLD1" }), // Expired >24m
+  makeLgaRow("20300101", "99991231", { LGA01: "FUT1" }), // Future
+];
+
+const pe_pa0014 = [
+  { BEGDA: "20240101", ENDDA: "99991231", LGART: "/001" },
+  { BEGDA: "20200101", ENDDA: "20210101", LGART: "OLD2" },
+];
+
+const pe_pa0015 = [
+  { BEGDA: "20240501", ENDDA: "99991231", LGART: "Z001" },
+  { BEGDA: "20240601", ENDDA: "99991231", LGART: "1000" }, // duplicate of pa0008
+];
+
+const pe_pa0267 = [
+  { BEGDA: "20240701", ENDDA: "99991231", LGART: "9000" },
+];
+
+const pe_t512t = [
+  { SPRSL: "E", LGART: "1000", LGTXT: "Basic Salary" },
+  { SPRSL: "E", LGART: "1010", LGTXT: "Housing Allowance" },
+  { SPRSL: "E", LGART: "/001", LGTXT: "Valuation Basis 1" },
+  { SPRSL: "E", LGART: "Z001", LGTXT: "Project Bonus" },
+  { SPRSL: "D", LGART: "Z001", LGTXT: "Projekt Praemie" },
+];
+
+
+// ---------------------------------------------------------------------------
+// PE module extension: EP10-EP15 synthetic data
+//
+// T52C0 (standard payroll schemas):
+//   SCHEM XMOD: COPY to X000, X001 -> 2 subschemas; also has non-COPY row (excluded in EP11)
+//   SCHEM ZMOD: COPY to Z000 -> 1 subschema
+//   SCHEM XINN: COPY to X010 -> 1 subschema
+//   EP10 std distinct schemas: XMOD, ZMOD, XINN -> 3
+// T52C1 (custom payroll schemas):
+//   SCHEM ZCU1: COPY to Z010, Z011 -> 2 subschemas
+//   SCHEM YCU1: COPY to Y010 -> 1 subschema
+//   EP10 custom distinct schemas: ZCU1, YCU1 -> 2  total=5
+// T52C5 (PCR):
+//   std: X010, X020, M001  -> 3
+//   custom: Z010, Y020, 9001 -> 3  total=6
+// T52A0 (functions+operations):
+//   FU std: ADVAL, MULTI -> 2; FU custom: ZTEST, YCALC -> 2
+//   OP std: ADDWT -> 1; OP custom: ZOPER -> 1
+// T599B: I1 (endda 99991231), U1 (endda 99991231), X1 (endda 20231231)
+// HRPY_RGDIR (PE slice via hrpy rows, filtered by FPEND >= today-24m):
+//   U1 active (20241231), I1 active (20241231) -> present in active payroll run
+//   X1 not in HRPY_RGDIR at all -> unused
+const pe_t52c0 = [
+  { SCHEM: "XMOD", FUNCO: "COPY", PARM1: "X000" },
+  { SCHEM: "XMOD", FUNCO: "COPY", PARM1: "X001" },
+  { SCHEM: "XMOD", FUNCO: "ACTIO", PARM1: "SKIP" },
+  { SCHEM: "ZMOD", FUNCO: "COPY", PARM1: "Z000" },
+  { SCHEM: "XINN", FUNCO: "COPY", PARM1: "X010" },
+];
+
+const pe_t52c1 = [
+  { SCHEM: "ZCU1", FUNCO: "COPY", PARM1: "Z010" },
+  { SCHEM: "ZCU1", FUNCO: "COPY", PARM1: "Z011" },
+  { SCHEM: "YCU1", FUNCO: "COPY", PARM1: "Y010" },
+];
+
+const pe_t52c5 = [
+  { CCYCL: "X010" },
+  { CCYCL: "X020" },
+  { CCYCL: "M001" },
+  { CCYCL: "Z010" },
+  { CCYCL: "Y020" },
+  { CCYCL: "9001" },
+];
+
+const pe_t52a0 = [
+  { OTYPE: "FU", ONAME: "ADVAL", LGTXT: "Add Value" },
+  { OTYPE: "FU", ONAME: "MULTI", LGTXT: "Multiply" },
+  { OTYPE: "FU", ONAME: "ZTEST", LGTXT: "Custom Function Z" },
+  { OTYPE: "FU", ONAME: "YCALC", LGTXT: "Custom Function Y" },
+  { OTYPE: "OP", ONAME: "ADDWT", LGTXT: "Add Wage Type" },
+  { OTYPE: "OP", ONAME: "ZOPER", LGTXT: "Custom Operation Z" },
+];
+
+// T599B: payroll areas with SAP open-ended validity (ENDDA in YYYYMMDD)
+const pe_t599b = [
+  { ABKRS: "I1", ENDDA: "99991231" },
+  { ABKRS: "U1", ENDDA: "99991231" },
+  { ABKRS: "X1", ENDDA: "20231231" },
+];
+
+// T549T: payroll area descriptions (ATEXT)
+const pe_t549t = [
+  { ABKRS: "U1", ATEXT: "US Monthly" },
+  { ABKRS: "I1", ATEXT: "India Monthly" },
+  { ABKRS: "G1", ATEXT: "UK Semi-Monthly" },
+  { ABKRS: "D1", ATEXT: "Germany Semi-Monthly" },
+  { ABKRS: "Z1", ATEXT: "Custom Bi-Weekly" },
+  { ABKRS: "Y1", ATEXT: "Special Payroll" },
+];
+
 export const MOCK_TABLES = {
   PA0000: pa0000, PA0001: pa0001, T500P: t500p, T001: t001, HRPY_RGDIR: hrpy,
   T582A: pa_t582a, T777D: t777d, T591A: t591a, T582S: t582s,
   T588M: pa_t588m, T588Z: pa_t588z,
   T778O: om_t778o, T778V: om_t778v, T778A: om_t778a,
-  HRP1000: om_hrp1000, HRP1001: om_hrp1001, T778P: om_t778p,
+  HRP1000: om_hrp1000, HRP1001: om_hrp1001, T777P: om_t777p, T778P: om_t777p,
   T77PQ: om_t77pq, T77UA: om_t77ua,
+  T549A: pe_t549a, T549R: pe_t549r, T549N: pe_t549n,
+  T549B: pe_t549b, T549C: pe_t549c, T549D: pe_t549d,
+  T512W: pe_t512w, T500T: pe_t500t, T500L: pe_t500t,
+  PA0008: pe_pa0008, PA0014: pe_pa0014, PA0015: pe_pa0015, PA0267: pe_pa0267,
+  T512T: pe_t512t,
+  T52C0: pe_t52c0, T52C1: pe_t52c1, T52C5: pe_t52c5,
+  T52A0: pe_t52a0,
+  T52A0_T: pe_t52a0,
+  T599B: pe_t599b,
+  T549T: pe_t549t,
 };

@@ -165,9 +165,28 @@ Unit tests cover each accepted shape and the failures (`tests/unit.test.js`).
 | `T778A` | `WEGID` | `om_t778a` |
 | `HRP1000` | `OTYPE, PLVAR` | `om_hrp1000` |
 | `HRP1001` | `RELAT, PLVAR` | `om_hrp1001` |
-| `T778P` | `PLVAR, PTEXT` | `om_t778p` |
+| `T777P` | `SPRAS, PLVAR, PTEXT` | `om_t777p` |
 | `T77PQ` | `PROFL` | `om_t77pq` |
 | `T77UA` | `UNAME, PROFL` | `om_t77ua` |
+
+### 4.9 Tables and fields requested by the PE module (`pe.constants.js`)
+
+| SAP table | Fields requested (in order) | Staging table |
+|---|---|---|
+| `T549A` | `ABKRS, PERMO` | `pe_t549a` |
+| `T549R` | `PERMO` | `pe_t549r` |
+| `PA0001` | `PERNR, ABKRS` | `pe_pa0001` |
+| `T549N` | `SPRAS, PERMO, ATEXT` | `pe_t549n` |
+| `T549B` | `NAMEN` | `pe_t549b` |
+| `T549C` | `NAMEN` | `pe_t549c` |
+| `T549D` | `NAMEN, FUNID, FUNCT` | `pe_t549d` |
+| `T512W` | `MOLGA, LGART` | `pe_t512w` |
+| `T500T` | `SPRAS, MOLGA, LTEXT` | `pe_t500t` |
+| `PA0008` | `BEGDA, ENDDA, LGA01..LGA40` | `pe_pa0008` |
+| `PA0014` | `BEGDA, ENDDA, LGART` | `pe_pa0014` |
+| `PA0015` | `BEGDA, ENDDA, LGART` | `pe_pa0015` |
+| `PA0267` | `BEGDA, ENDDA, LGART` | `pe_pa0267` |
+| `T512T` | `SPRSL, LGART, LGTXT` | `pe_t512t` |
 
 Tables are fetched with concurrency `SAP_FETCH_CONCURRENCY` (default 2); each table is read fully into memory before loading.
 

@@ -59,14 +59,14 @@ export async function getEvaluationPathsSummary() {
 
 /**
  * 4. Objects per Plan Version: count HRP1000 OTYPE grouped by PLVAR,
- * mapped to T778P PTEXT.
+ * mapped to T777P PTEXT filtered by SPRAS = 'E'.
  */
 export async function getObjectsPerPlanVersion() {
   const { rows } = await query(
     `WITH ptexts AS (
        SELECT DISTINCT ON (plvar) plvar, ptext
-       FROM om_t778p
-       WHERE plvar IS NOT NULL
+       FROM om_t777p
+       WHERE spras = 'E' AND plvar IS NOT NULL
        ORDER BY plvar
      ),
      obj_counts AS (
@@ -88,14 +88,14 @@ export async function getObjectsPerPlanVersion() {
 
 /**
  * 5. Relationships per Plan Version: count HRP1001 RELAT grouped by PLVAR,
- * mapped to T778P PTEXT.
+ * mapped to T777P PTEXT filtered by SPRAS = 'E'.
  */
 export async function getRelationshipsPerPlanVersion() {
   const { rows } = await query(
     `WITH ptexts AS (
        SELECT DISTINCT ON (plvar) plvar, ptext
-       FROM om_t778p
-       WHERE plvar IS NOT NULL
+       FROM om_t777p
+       WHERE spras = 'E' AND plvar IS NOT NULL
        ORDER BY plvar
      ),
      rel_counts AS (
