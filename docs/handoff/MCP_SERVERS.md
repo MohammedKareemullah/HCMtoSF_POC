@@ -40,8 +40,8 @@ Descriptions, full input schemas and output formats of **every** tool are **UNKN
 | Tool | Sample arguments (from script) | Used by this backend? |
 |---|---|---|
 | `sap_connection_check` | `{}` | Wrapper exists (`sapTools.js`), **not called** by the backend |
-| `sap_table_read` | `{ table: "PA0001", fields: ["PERNR","GSBER","BTRTL"], rowCount: 5, delimiter: "\|" }` | **YES, the only tool the backend uses** |
-| `sap_function_call` | `{ functionName: "RFC_SYSTEM_INFO", parameters: {} }` | Wrapper only, not called |
+| `sap_table_read` | `{ table: "PA0001", fields: ["PERNR","GSBER","BTRTL"], rowCount: 5, delimiter: "\|" }` | **YES, used by KPI table modules** |
+| `sap_function_call` | `{ functionName: "RFC_SYSTEM_INFO", parameters: {} }` | **YES, used by `header` module (`RFC_GET_SYSTEM_INFO` with `{ DESTINATION: "" }`)** |
 | `sap_lock_entries` | `{ functionName: "ENQUEUE_READ" }` | Wrapper only, not called |
 | `sap_wrapper_catalog` | `{}` | No |
 | `sap_wrapper_probe` | `{ functionName: "ZHC_GET_DATA_QUALITY_KPIS" }` | No |
@@ -165,7 +165,7 @@ Unit tests cover each accepted shape and the failures (`tests/unit.test.js`).
 | `T778A` | `WEGID` | `om_t778a` |
 | `HRP1000` | `OTYPE, PLVAR` | `om_hrp1000` |
 | `HRP1001` | `RELAT, PLVAR` | `om_hrp1001` |
-| `T777P` | `SPRAS, PLVAR, PTEXT` | `om_t777p` |
+| `T777P` | `LANGU, PLVAR, PTEXT` | `om_t777p` |
 | `T77PQ` | `PROFL` | `om_t77pq` |
 | `T77UA` | `UNAME, PROFL` | `om_t77ua` |
 
@@ -187,6 +187,19 @@ Unit tests cover each accepted shape and the failures (`tests/unit.test.js`).
 | `PA0015` | `BEGDA, ENDDA, LGART` | `pe_pa0015` |
 | `PA0267` | `BEGDA, ENDDA, LGART` | `pe_pa0267` |
 | `T512T` | `SPRSL, LGART, LGTXT` | `pe_t512t` |
+
+### 4.10 Tables and fields requested by the TM module (`tm.constants.js`)
+
+| SAP table | Fields requested (in order) | Staging table |
+|---|---|---|
+| `T508A` | `SCHKZ, ZMODN` | `tm_t508a` |
+| `T550A` | `TPROG, BTBEG, BTEND, ETBEG, ETEND, SOBEG, SOEND, MOTPR` | `tm_t550a` |
+| `T551A` | `ZMODN, TPRG1, TPRG2, TPRG3, TPRG4, TPRG5, TPRG6, TPRG7` | `tm_t551a` |
+| `T550P` | `MOTPR, PAMOD` | `tm_t550p` |
+| `T554S` | `SUBTY, ART01` | `tm_t554s` |
+| `T554T` | `AWART, ATEXT` | `tm_t554t` |
+| `PA2001` | `SUBTY, BEGDA, ENDDA` | `tm_pa2001` |
+| `PA2002` | `SUBTY, BEGDA, ENDDA` | `tm_pa2002` |
 
 Tables are fetched with concurrency `SAP_FETCH_CONCURRENCY` (default 2); each table is read fully into memory before loading.
 

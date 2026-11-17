@@ -6,6 +6,11 @@ staged in Postgres, processed per KPI section, and exposed as JSON APIs for the 
 KPI sections implemented:
 - **headcount** – employment status, country, company code, employee table, payroll per month, hires per year.
 - **hcm_core** – infotype catalogue: category breakdown, subtype counts per infotype, full infotype/subtype detail table.
+- **pa** – Personnel Administration: screen classifications, module pool mapping, field visibility, dynamic actions.
+- **om** – Organizational Management: object types, relationships, evaluation paths, plan version metrics, structural auth profiles.
+- **pe** – Payroll Engine: payroll areas, period parameters, company features, wage types, schemas, PCRs, functions/operations, unused payroll areas.
+- **tm** – Time Management: work schedule rules, daily/period work schedules, work schedule mapping, break/overtime/modifier schedules, attendance/absence types, unused absence/attendance types.
+- **header** – SAP system header metadata via `RFC_GET_SYSTEM_INFO` (`RFCSI_EXPORT`: system name, operating system, database system, logical destination).
 
 ## Run it
 
@@ -55,6 +60,25 @@ src/
       hcm_core.processor.js    pure: category aggregation, subtype totals, detail shaping
       hcm_core.service.js      orchestration: sync + KPI reads
       hcm_core.controller.js / hcm_core.routes.js
+    pa/                        Personnel Administration KPI section
+    om/                        Organizational Management KPI section
+    pe/                        Payroll Engine KPI section
+    tm/
+      tm.constants.js          SAP tables/fields -> Postgres columns (T508A, T550A, T551A, T550P, T554S, PA2001, PA2002)
+      tm.fetcher.js            SAP -> raw records (via MCP)
+      tm.loader.js             raw records -> Postgres staging tables (one transaction)
+      tm.repository.js         SQL: work schedule counts, TPROG->ZMODN->SCHKZ joins, subtype classifications, 24m active checks
+      tm.processor.js          pure: nested SCHKZ->ZMODN->TPROG mapping and response shaping
+      tm.service.js            orchestration: sync + KPI reads
+      tm.controller.js / tm.routes.js
+    header/
+      header.constants.js      RFC_GET_SYSTEM_INFO + RFCSI_EXPORT -> hdr_system_info
+      header.fetcher.js        MCP sapFunctionCall + RFCSI_EXPORT normalization
+      header.loader.js         raw dict -> Postgres hdr_system_info (one transaction)
+      header.repository.js     SQL: read staged system info
+      header.processor.js      pure: shape systemName, operatingSystem, databaseSystem, logicalDestination
+      header.service.js        orchestration: sync + read
+      header.controller.js / header.routes.js
 mock/                          fake MCP server + dataset
 tests/                         unit + end-to-end tests
 ```
@@ -114,17 +138,17 @@ All GETs return `{ data, meta: { lastSyncedAt, stale, warning? } }`.
 | GET | `/api/om/object-types` | Count of standard (not starting with 9) vs custom (starts with 9) OM object types from T778O |
 | GET | `/api/om/relationships` | Count of standard vs custom (starts with Z or 900–999) OM relationships from T778V |
 | GET | `/api/om/evaluation-paths` | Count of standard vs custom (starts with Z) OM evaluation paths from T778A |
-| GET | `/api/om/objects-per-plan-version` | Count of objects (OTYPE from HRP1000) grouped by plan version (PLVAR) with description (PTEXT from T777P with SPRAS='E') |
-| GET | `/api/om/relationships-per-plan-version` | Count of relationships (RELAT from HRP1001) grouped by plan version (PLVAR) with description (PTEXT from T777P with SPRAS='E') |
+| GET | `/api/om/objects-per-plan-version` | Count of objects (OTYPE from HRP1000) grouped by plan version (PLVAR) with description (PTEXT from T777P with LANGU='E') |
+| GET | `/api/om/relationships-per-plan-version` | Count of relationships (RELAT from HRP1001) grouped by plan version (PLVAR) with description (PTEXT from T777P with LANGU='E') |
 | GET | `/api/om/auth-profiles` | Count of assigned vs unassigned structural authorization profiles from T77PQ mapped to T77UA |
-| POST | `/api/pe/sync` | Fetch PE tables (T549A, T549R, PA0001, T549N, T549B, T549C, T549D, T512W, T500T, PA0008, PA0014, PA0015, PA0267, T512T) from SAP now |
+| POST | `/api/pe/sync` | Fetch PE tables (T549A, T549R, PA0001, T549N, T549B, T549C, T549D, T549BT, T512W, T500T, PA0008, PA0014, PA0015, PA0267, T512T, T52C0, T52C1, T52C5, T52A0_T, HRPY_RGDIR, T549T) from SAP now |
 | GET | `/api/pe/sync/status` | Syncing flag, last success, latest run for PE |
 | GET | `/api/pe/payroll-area-summary` | Count of standard vs custom (starts with Z or Y) payroll areas from T549A |
 | GET | `/api/pe/period-parameter-summary` | Count of standard vs custom (between 50–99) period parameters from T549R |
 | GET | `/api/pe/employees-per-payroll-area` | Count of employees (distinct PERNR) under each payroll area from PA0001 |
 | GET | `/api/pe/payroll-areas-per-period` | Count of payroll areas (ABKRS) per period parameter (PERMO) from T549A mapped to T549N ATEXT (SPRAS='E') |
 | GET | `/api/pe/company-features-summary` | Count of distinct company features: standard from T549B vs custom from T549C |
-| GET | `/api/pe/feature-functions` | From T549D (FUNID='P'), unique features, function count, and list of functions (dropping number suffix) |
+| GET | `/api/pe/feature-functions` | From T549D (FUNID='P'), unique features (`feature`), feature name (`TITLE` from T549BT with `FEATURE_LANGUAGE='E'` mapped via `T549B-NAMEN = T549BT-FEATURE`), function count, and list of functions (dropping number suffix) |
 | GET | `/api/pe/wage-type-summary` | Categorize wage types (LGART from T512W): custom (starts with Z, Y, or digit 0–9) vs standard |
 | GET | `/api/pe/wage-types-per-country` | Count of wage types grouped by MOLGA from T512W mapped to country name from T500T (SPRAS='E') |
 | GET | `/api/pe/active-wage-types` | Active wage types from PA0008 (LGA01–40), PA0014, PA0015, PA0267 within last 24m mapped to T512T text (SPRSL='E') |
@@ -134,6 +158,21 @@ All GETs return `{ data, meta: { lastSyncedAt, stale, warning? } }`.
 | GET | `/api/pe/payroll-functions-operations-summary` | Summary of functions (OTYPE='FU') and operations (OTYPE='OP') from T52A0 with std vs custom (starts with Y or Z) |
 | GET | `/api/pe/custom-functions-operations` | List of custom functions (FU) and operations (OP) starting with Z or Y from T52A0 with type label and description (LGTXT) |
 | GET | `/api/pe/unused-payroll-areas` | Unused payroll areas: configured in T599B but not present in HRPY_RGDIR within the last 24 months, with end date |
+| POST | `/api/tm/sync` | Fetch TM tables (T508A, T550A, T551A, T550P, T554S, T554T, PA2001, PA2002) from SAP now |
+| GET | `/api/tm/sync/status` | Syncing flag, last success, latest run for TM |
+| GET | `/api/tm/work-schedule-rules` | Count of distinct work schedule rules (`SCHKZ`) from T508A |
+| GET | `/api/tm/daily-work-schedules` | Count of distinct daily work schedules (`TPROG`) from T550A |
+| GET | `/api/tm/period-work-schedules` | Count of distinct period work schedules (`ZMODN`) from T551A |
+| GET | `/api/tm/work-schedule-mapping` | Nested hierarchy mapping `SCHKZ -> ZMODN -> [TPROG]` from T508A + T551A (`TPRG1`–`TPRG7`) |
+| GET | `/api/tm/break-schedules` | Daily work schedules (`TPROG`) with break times (`BTBEG`, `BTEND`, `ETBEG`, `ETEND`) mapped to `ZMODN` and `SCHKZ`, plus unique counts (`noOfTprog`, `noOfZmodn`, `noOfSchkz`) |
+| GET | `/api/tm/overtime-schedules` | Daily work schedules (`TPROG`) with overtime/special hours (`SOBEG`, `SOEND`) mapped to `ZMODN` and `SCHKZ`, plus unique counts (`noOfTprog`, `noOfZmodn`, `noOfSchkz`) |
+| GET | `/api/tm/modifier-schedules` | Modifiers (`PAMOD` from T550P) mapped via `MOTPR` to `TPROG` (T550A), then resolved to `ZMODN` and `SCHKZ`, plus unique counts (`noOfTprog`, `noOfZmodn`, `noOfSchkz`) |
+| GET | `/api/tm/attendance-absence-types` | Count of standard vs custom (starts with `Z`, `Y`, or `9`) absence (`ART01='A'`) and attendance (`ART01='P'`) subtypes from T554S |
+| GET | `/api/tm/unused-absence-types` | Absence subtypes (`ART01='A'`) in T554S with no active PA2001 record (`BEGDA <= today` and `ENDDA >= today - 24m`), mapped to T554T `ATEXT` (`T554S-SUBTY = T554T-AWART`) |
+| GET | `/api/tm/unused-attendance-types` | Attendance subtypes (`ART01='P'`) in T554S with no active PA2002 record (`BEGDA <= today` and `ENDDA >= today - 24m`), mapped to T554T `ATEXT` (`T554S-SUBTY = T554T-AWART`) |
+| POST | `/api/header/sync` | Execute `RFC_GET_SYSTEM_INFO` (`{ DESTINATION: "" }`) via MCP `sap_function_call` now |
+| GET | `/api/header/sync/status` | Syncing flag, last success, latest run for header |
+| GET | `/api/header/system-info` | System header info from `RFCSI_EXPORT` (`systemName`, `operatingSystem`, `databaseSystem`, `logicalDestination`); also mounted at `/api/header` |
 | GET | `/health` | DB ping |
 
 ## Business rules (and the choices behind them)
@@ -180,8 +219,8 @@ All GETs return `{ data, meta: { lastSyncedAt, stale, warning? } }`.
 1. **OM Object Types (T778O):** Non-null `OTYPE` values. Standard = does not start with `'9'`, Custom = starts with `'9'`.
 2. **OM Relationships (T778V):** Non-null `RELAT` values. Custom = starts with `'Z'`/`'z'` OR numeric range 900–999. Standard = neither.
 3. **OM Evaluation Paths (T778A):** Non-null `WEGID` values. Standard = does not start with `'Z'`/`'z'`, Custom = starts with `'Z'`/`'z'`.
-4. **Objects per Plan Version (HRP1000 + T777P):** Counts object instances grouped by `PLVAR`, joined to `T777P` for plan version name `PTEXT` filtered by `SPRAS = 'E'` ("NA" if unmapped).
-5. **Relationships per Plan Version (HRP1001 + T777P):** Counts relationship records grouped by `PLVAR`, joined to `T777P` for plan version name `PTEXT` filtered by `SPRAS = 'E'` ("NA" if unmapped).
+4. **Objects per Plan Version (HRP1000 + T777P):** Counts object instances grouped by `PLVAR`, joined to `T777P` for plan version name `PTEXT` filtered by `LANGU = 'E'` ("NA" if unmapped).
+5. **Relationships per Plan Version (HRP1001 + T777P):** Counts relationship records grouped by `PLVAR`, joined to `T777P` for plan version name `PTEXT` filtered by `LANGU = 'E'` ("NA" if unmapped).
 6. **Authorization Profiles (T77PQ + T77UA):** Deduplicated `PROFL` from `T77PQ`. Assigned = exists in `T77UA` (has at least one assigned user), Unassigned = not found in `T77UA`.
 
 ### PE (Payroll Engine / Payroll)
@@ -190,7 +229,7 @@ All GETs return `{ data, meta: { lastSyncedAt, stale, warning? } }`.
 3. **Employees per Payroll Area (PA0001):** Deduplicates `PERNR` first to eradicate time-slice duplicates, counting distinct employees under each `ABKRS`.
 4. **Payroll Areas per Period Parameter (T549A + T549N):** Counts distinct `ABKRS` per `PERMO` from `T549A`, joined with `T549N` for `ATEXT` (`SPRAS = 'E'`).
 5. **Company Features (T549B + T549C):** Distinct `NAMEN` from `T549B` as standard company features; distinct `NAMEN` from `T549C` as custom company features.
-6. **Feature Functions (T549D):** Filters `FUNID = 'P'`, groups by `NAMEN`, counting distinct functions and listing function names with number suffixes stripped (e.g. "CALC 01" -> "CALC").
+6. **Feature Functions (T549D + T549B + T549BT):** Filters `FUNID = 'P'` on `T549D`, groups by `NAMEN`, counts distinct functions, strips number suffixes from `FUNCT` (e.g. `"CALC 01"` -> `"CALC"`), and maps `T549B-NAMEN = T549BT-FEATURE` (filtered by `FEATURE_LANGUAGE = 'E'`) to output `feature`, `featureName` (`TITLE`), `noOfFunctions`, and `functions`.
 7. **Wage Type Summary (T512W):** Categorizes distinct `LGART`: Custom = starts with `'Z'`, `'Y'`, or digit `0`–`9`; Standard = other prefixes.
 8. **Wage Types per Country (T512W + T500T):** Groups `T512W` by `MOLGA`, counts distinct wage types, joined with `T500T` (`SPRAS = 'E'`) for country name `LTEXT`.
 9. **Active Wage Types (PA0008, PA0014, PA0015, PA0267 + T512T):** Extracts distinct wage types from `PA0008` (`LGA01`–`LGA40`), `PA0014`, `PA0015`, and `PA0267` where `BEGDA <= CURRENT_DATE` and `ENDDA >= CURRENT_DATE - 24 months`, mapped to `T512T` for English description `LGTXT` (`SPRSL = 'E'`).
@@ -200,6 +239,21 @@ All GETs return `{ data, meta: { lastSyncedAt, stale, warning? } }`.
 13. **Payroll Functions & Operations Summary (T52A0):** Evaluates `T52A0` for functions (`OTYPE = 'FU'`) and operations (`OTYPE = 'OP'`), counting custom (`ONAME` starts with `'Y'` or `'Z'`) vs standard.
 14. **Custom Functions and Operations (T52A0):** Lists custom entries from `T52A0` where `ONAME` starts with `'Z'` or `'Y'`, returning type label (`"Function"` for FU, `"Operation"` for OP), name, and description (`LGTXT`).
 15. **Unused Payroll Areas (T599B + HRPY_RGDIR):** Identifies distinct payroll areas (`ABKRS`) configured in `T599B` that have not appeared in `HRPY_RGDIR` within the last 24 months (`FPEND >= CURRENT_DATE - 24 months`), returning payroll area and validity end date (`ENDDA`).
+
+### TM (Time Management)
+1. **Work Schedule Rules (T508A):** Counts distinct non-empty `SCHKZ` values from `T508A`.
+2. **Daily Work Schedules (T550A):** Counts distinct non-empty `TPROG` values from `T550A`.
+3. **Period Work Schedules (T551A):** Counts distinct non-empty `ZMODN` values from `T551A`.
+4. **Work Schedule Mapping (T551A + T508A):** Unnests daily work schedule slots `TPRG1`–`TPRG7` per `ZMODN` from `T551A`, joins to `T508A` (`ZMODN -> SCHKZ`), and nests the output as `SCHKZ -> ZMODN -> [TPROG]`.
+5. **Break Schedules (T550A + T551A + T508A):** Selects distinct `TPROG` from `T550A` where any of `BTBEG`, `BTEND`, `ETBEG`, `ETEND` is non-empty, resolves each to `(tprog, zmodn, schkz)` via `T551A` and `T508A`, and returns unique counts (`noOfTprog`, `noOfZmodn`, `noOfSchkz`) alongside `items`.
+6. **Overtime Schedules (T550A + T551A + T508A):** Selects distinct `TPROG` from `T550A` where `SOBEG` or `SOEND` is non-empty, resolves each to `(tprog, zmodn, schkz)` via `T551A` and `T508A`, and returns unique counts (`noOfTprog`, `noOfZmodn`, `noOfSchkz`) alongside `items`.
+7. **Modifier Schedules (T550P + T550A + T551A + T508A):** Joins non-empty `T550P.PAMOD` to `T550A` via `MOTPR`, resolves `TPROG -> ZMODN -> SCHKZ` via `T551A` and `T508A`, and returns unique counts (`noOfTprog`, `noOfZmodn`, `noOfSchkz`) alongside `items`.
+8. **Attendance & Absence Types (T554S):** Groups `T554S` by `ART01` (`'A'` = absences, `'P'` = attendances), counting custom (`SUBTY` starting with `Z`, `Y`, or `9`) vs standard subtypes.
+9. **Unused Absence Types (T554S + T554T + PA2001):** Finds distinct `SUBTY` values in `T554S` with `ART01 = 'A'` that do not appear in active `PA2001` records (`BEGDA <= CURRENT_DATE` and `ENDDA >= CURRENT_DATE - 24 months`), and maps `T554S-SUBTY = T554T-AWART` to output `subtype` and `description` (`ATEXT`).
+10. **Unused Attendance Types (T554S + T554T + PA2002):** Finds distinct `SUBTY` values in `T554S` with `ART01 = 'P'` that do not appear in active `PA2002` records (`BEGDA <= CURRENT_DATE` and `ENDDA >= CURRENT_DATE - 24 months`), and maps `T554S-SUBTY = T554T-AWART` to output `subtype` and `description` (`ATEXT`).
+
+### Header (System Info)
+1. **System Info (`RFC_GET_SYSTEM_INFO`):** Executes `sapFunctionCall("RFC_GET_SYSTEM_INFO", { DESTINATION: "" })`, extracts the `RFCSI_EXPORT` dictionary, stages `RFCSYSID`, `RFCOPSYS`, `RFCDBSYS`, and `RFCDEST` in `hdr_system_info`, and returns `{ systemName, operatingSystem, databaseSystem, logicalDestination }`.
 
 ## Notes
 

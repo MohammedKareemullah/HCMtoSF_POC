@@ -56,9 +56,9 @@ export function getSourceTables() {
       key: "t777p",
       sap: "T777P",
       pg: "om_t777p",
-      required: ["spras", "plvar"],
+      required: ["langu", "plvar"],
       columns: [
-        { sap: "SPRAS", name: "spras", type: "text" },
+        { sap: "LANGU", name: "langu", type: "text" },
         { sap: "PLVAR", name: "plvar", type: "text" },
         { sap: "PTEXT", name: "ptext", type: "text" },
       ],

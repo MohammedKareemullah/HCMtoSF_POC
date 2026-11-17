@@ -107,7 +107,7 @@ These are the owner's requirements, preserved as faithfully as possible. Status 
 | Evaluation paths | `T778A` | `WEGID` |
 | Objects | `HRP1000` | `OTYPE`, `PLVAR` |
 | Object relationships | `HRP1001` | `RELAT`, `PLVAR` |
-| Plan version texts | `T777P` | `SPRAS`, `PLVAR`, `PTEXT` |
+| Plan version texts | `T777P` | `LANGU`, `PLVAR`, `PTEXT` |
 | Auth profile definitions | `T77PQ` | `PROFL` |
 | User profile assignments | `T77UA` | `UNAME`, `PROFL` |
 
@@ -117,8 +117,8 @@ These are the owner's requirements, preserved as faithfully as possible. Status 
 | 1 | From `T778O`: remove blank/null `OTYPE`. Count standard (does not start with '9') and custom (starts with '9'). | `COUNT(*) FILTER` in SQL | `GET /api/om/object-types` | IMPLEMENTED, VERIFIED (mock) |
 | 2 | From `T778V`: remove blank/null `RELAT`. Count standard vs custom (starts with 'Z' or 900–999). | `COUNT(*) FILTER` in SQL with regex | `GET /api/om/relationships` | IMPLEMENTED, VERIFIED (mock) |
 | 3 | From `T778A`: remove blank/null `WEGID`. Count standard vs custom (starts with 'Z'). | `COUNT(*) FILTER` in SQL | `GET /api/om/evaluation-paths` | IMPLEMENTED, VERIFIED (mock) |
-| 4 | From `HRP1000` + `T777P`: count `OTYPE` grouped by `PLVAR`, mapped to `PTEXT` (`SPRAS = 'E'`). | `COUNT(*)` grouped by `PLVAR` with left join to `T777P` | `GET /api/om/objects-per-plan-version` | IMPLEMENTED, VERIFIED (mock) |
-| 5 | From `HRP1001` + `T777P`: count `RELAT` grouped by `PLVAR`, mapped to `PTEXT` (`SPRAS = 'E'`). | `COUNT(*)` grouped by `PLVAR` with left join to `T777P` | `GET /api/om/relationships-per-plan-version` | IMPLEMENTED, VERIFIED (mock) |
+| 4 | From `HRP1000` + `T777P`: count `OTYPE` grouped by `PLVAR`, mapped to `PTEXT` (`LANGU = 'E'`). | `COUNT(*)` grouped by `PLVAR` with left join to `T777P` | `GET /api/om/objects-per-plan-version` | IMPLEMENTED, VERIFIED (mock) |
+| 5 | From `HRP1001` + `T777P`: count `RELAT` grouped by `PLVAR`, mapped to `PTEXT` (`LANGU = 'E'`). | `COUNT(*)` grouped by `PLVAR` with left join to `T777P` | `GET /api/om/relationships-per-plan-version` | IMPLEMENTED, VERIFIED (mock) |
 | 6 | From `T77PQ` + `T77UA`: map `T77PQ-PROFL = T77UA-PROFL` to count assigned vs unassigned auth profiles. | `COUNT(*) FILTER` with left join to `T77UA` | `GET /api/om/auth-profiles` | IMPLEMENTED, VERIFIED (mock) |
 
 ## 7. Functional requirements (KPI section 5: PE - Payroll Engine / Payroll)
@@ -154,7 +154,35 @@ These are the owner's requirements, preserved as faithfully as possible. Status 
 | 8 | From `T512W` + `T500T`: group by `MOLGA`, count wage types, map country name from `T500T` (`SPRAS = 'E'`). | `COUNT(DISTINCT lgart)` grouped by `molga`, left join `pe_t500t` | `GET /api/pe/wage-types-per-country` | IMPLEMENTED, VERIFIED (mock) |
 | 9 | From `PA0008` (LGA01–40), `PA0014`, `PA0015`, `PA0267` within 24m: distinct active wage types mapped to `T512T` `LGTXT` (`SPRSL = 'E'`). | `unnest(ARRAY[...])` + `UNION` across tables with date filter, left join `pe_t512t` | `GET /api/pe/active-wage-types` | IMPLEMENTED, VERIFIED (mock) |
 
-## 8. Main features and capabilities
+## 8. Functional requirements (KPI section 6: TM - Time Management)
+
+### 8.1 Required source data
+| Purpose | SAP table | Fields read |
+|---|---|---|
+| Work schedule rules | `T508A` | `SCHKZ`, `ZMODN` |
+| Daily work schedules | `T550A` | `TPROG`, `BTBEG`, `BTEND`, `ETBEG`, `ETEND`, `SOBEG`, `SOEND`, `MOTPR` |
+| Period work schedules | `T551A` | `ZMODN`, `TPRG1`, `TPRG2`, `TPRG3`, `TPRG4`, `TPRG5`, `TPRG6`, `TPRG7` |
+| Work schedule modifiers | `T550P` | `MOTPR`, `PAMOD` |
+| Attendance / absence types | `T554S` | `SUBTY`, `ART01` |
+| Attendance / absence texts | `T554T` | `AWART`, `ATEXT` |
+| Recorded absences | `PA2001` | `SUBTY`, `BEGDA`, `ENDDA` |
+| Recorded attendances | `PA2002` | `SUBTY`, `BEGDA`, `ENDDA` |
+
+### 8.2 Required calculations
+| # | Requirement | Implementation | Endpoint | Status |
+|---|---|---|---|---|
+| 1 | Count distinct work schedule rules (`SCHKZ`) from `T508A`. | `COUNT(DISTINCT schkz)` on `tm_t508a` | `GET /api/tm/work-schedule-rules` | IMPLEMENTED, UNIT-TESTED (processor) |
+| 2 | Count distinct daily work schedules (`TPROG`) from `T550A`. | `COUNT(DISTINCT tprog)` on `tm_t550a` | `GET /api/tm/daily-work-schedules` | IMPLEMENTED, UNIT-TESTED (processor) |
+| 3 | Count distinct period work schedules (`ZMODN`) from `T551A`. | `COUNT(DISTINCT zmodn)` on `tm_t551a` | `GET /api/tm/period-work-schedules` | IMPLEMENTED, UNIT-TESTED (processor) |
+| 4 | Map `ZMODN` to `TPRG1`–`TPRG7` (`T551A`) and `ZMODN` to `SCHKZ` (`T508A`), returning `SCHKZ -> [ZMODN -> [TPROG...]]`. | `unnest(ARRAY[tprg1..tprg7])` + `array_agg` in SQL; nested by `SCHKZ` and `ZMODN` in Node processor | `GET /api/tm/work-schedule-mapping` | IMPLEMENTED, UNIT-TESTED (processor) |
+| 5 | Distinct `TPROG` from `T550A` with non-empty `BTBEG`, `BTEND`, `ETBEG`, or `ETEND`, mapped via `ZMODN` to `SCHKZ`. | Filter `T550A` break columns + join `T551A` and `T508A` | `GET /api/tm/break-schedules` | IMPLEMENTED, UNIT-TESTED (processor) |
+| 6 | Distinct `TPROG` from `T550A` with non-empty `SOBEG` or `SOEND`, mapped via `ZMODN` to `SCHKZ`. | Filter `T550A` overtime columns + join `T551A` and `T508A` | `GET /api/tm/overtime-schedules` | IMPLEMENTED, UNIT-TESTED (processor) |
+| 7 | Map `PAMOD` (`T550P`) to `TPROG` (`T550A`) via `MOTPR`, then map `TPROG -> ZMODN -> SCHKZ`. | Join `tm_t550p` to `tm_t550a` on `motpr`, then `T551A` and `T508A` | `GET /api/tm/modifier-schedules` | IMPLEMENTED, UNIT-TESTED (processor) |
+| 8 | Group `T554S` by `ART01` (`'A'` = absences, `'P'` = attendances), counting custom (`SUBTY` starting with `Z`, `Y`, `9`) vs standard. | `COUNT(*) FILTER` in SQL split by `art01` | `GET /api/tm/attendance-absence-types` | IMPLEMENTED, UNIT-TESTED (processor) |
+| 9 | Find `T554S` (`ART01 = 'A'`) subtypes absent from active `PA2001` records (`BEGDA <= today` and `ENDDA >= today - 24 months`), mapped to `T554T.ATEXT` (`SUBTY = AWART`). | `NOT IN` against filtered `tm_pa2001`, left join `tm_t554t` | `GET /api/tm/unused-absence-types` | IMPLEMENTED, UNIT-TESTED (processor) |
+| 10 | Find `T554S` (`ART01 = 'P'`) subtypes absent from active `PA2002` records (`BEGDA <= today` and `ENDDA >= today - 24 months`), mapped to `T554T.ATEXT` (`SUBTY = AWART`). | `NOT IN` against filtered `tm_pa2002`, left join `tm_t554t` | `GET /api/tm/unused-attendance-types` | IMPLEMENTED, UNIT-TESTED (processor) |
+
+## 9. Main features and capabilities
 
 - Per-KPI-section module structure (routes → controller → service → repository → processor), staging tables per section.
 - SAP access via a custom MCP client: HS256 JWT carrying SAP credentials, JSON-RPC `tools/call`, JSON or SSE responses, paging with `rowCount`/`rowSkips`, tolerant row parsing.

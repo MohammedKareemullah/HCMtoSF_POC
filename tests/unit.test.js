@@ -35,6 +35,20 @@ import {
   buildAuthProfilesSummary,
 } from "../src/modules/om/om.processor.js";
 import {
+  buildWorkScheduleRules,
+  buildDailyWorkSchedules,
+  buildPeriodWorkSchedules,
+  buildWorkScheduleMapping,
+  buildBreakSchedules,
+  buildOvertimeSchedules,
+  buildModifierSchedules,
+  buildAttendanceAbsenceTypes,
+  buildUnusedAbsenceTypes,
+  buildUnusedAttendanceTypes,
+} from "../src/modules/tm/tm.processor.js";
+import { normalizeSystemInfoResponse } from "../src/modules/header/header.fetcher.js";
+import { buildSystemInfo } from "../src/modules/header/header.processor.js";
+import {
   buildPayrollAreaSummary,
   buildPeriodParameterSummary,
   buildEmployeesPerPayrollArea,
@@ -507,7 +521,7 @@ test("buildCompanyFeaturesSummary counts distinct standard (T549B) and custom (T
   assert.equal(result.total, 5);
 });
 
-test("buildFeatureFunctions groups functions under features and drops number suffixes", () => {
+test("buildFeatureFunctions groups functions under features, maps featureName, and drops number suffixes", () => {
   const rows = [
     { namen: "TARIF", funid: "P", funct: "CALC 01" },
     { namen: "TARIF", funid: "P", funct: "CALC 02" }, // collapses to CALC
@@ -518,9 +532,21 @@ test("buildFeatureFunctions groups functions under features and drops number suf
   const result = buildFeatureFunctions(rows);
   assert.equal(result.total, 2);
   assert.deepEqual(result.items, [
-    { feature: "NUMKR", noOfFunctions: 1, functions: ["NUMGEN"] },
-    { feature: "TARIF", noOfFunctions: 2, functions: ["CALC", "CHECK"] },
+    { feature: "NUMKR", featureName: "NA", noOfFunctions: 1, functions: ["NUMGEN"] },
+    { feature: "TARIF", featureName: "NA", noOfFunctions: 2, functions: ["CALC", "CHECK"] },
   ]);
+
+  const sqlRows = [
+    { namen: "NUMKR", feature_name: "Number Range Intervals", no_of_functions: 1, functions: ["NUMGEN"] },
+    { namen: "TARIF", feature_name: "Pay Scale Group/Level Default", no_of_functions: 2, functions: ["CALC", "CHECK"] },
+  ];
+  assert.deepEqual(buildFeatureFunctions(sqlRows), {
+    total: 2,
+    items: [
+      { feature: "NUMKR", featureName: "Number Range Intervals", noOfFunctions: 1, functions: ["NUMGEN"] },
+      { feature: "TARIF", featureName: "Pay Scale Group/Level Default", noOfFunctions: 2, functions: ["CALC", "CHECK"] },
+    ],
+  });
 });
 
 test("buildWageTypeSummary categorizes custom (starts with Z, Y, or digit 0-9) vs standard wage types", () => {
@@ -664,4 +690,245 @@ test("buildUnusedPayrollAreas formats payroll area and description from DB rows"
     { payrollArea: "Z1", payrollAreaDesc: "Custom Bi-Weekly" },
     { payrollArea: "Y1", payrollAreaDesc: "Special Payroll" },
   ]);
+});
+
+// ---------------------------------------------------------------------------
+// TM (Time Management) processor unit tests
+// ---------------------------------------------------------------------------
+
+// Mock data mirrors mock/mockData.js tm_* arrays for hand-verifiable expected values.
+// T508A: FLEX->FLEX01, FLEX->FLEX02, STD->STD01, ZSHIFT->ZSHIFT01  (3 distinct SCHKZ)
+// T550A: STD8, BRKS(break), OVTM(overtime), MODF(modifier via M02)  (4 distinct TPROG)
+// T551A: FLEX01->[STD8,BRKS], FLEX02->[OVTM], STD01->[STD8], ZSHIFT01->[MODF]
+// T550P: M02->MODIFIER_X; T550A.MOTPR=M02 is MODF
+// T554S: 0100(A-std), 0200(A-std), Z001(A-custom), 0300(P-std), Y001(P-custom)
+// PA2001 active: {0100}  => unused absences: {0200, Z001}
+// PA2002 active: {0300}  => unused attendances: {Y001}
+
+test("buildWorkScheduleRules returns noOfWorkScheduleRules from count", () => {
+  assert.deepEqual(buildWorkScheduleRules({ count: 3 }), { noOfWorkScheduleRules: 3 });
+  assert.deepEqual(buildWorkScheduleRules({}), { noOfWorkScheduleRules: 0 });
+  assert.deepEqual(buildWorkScheduleRules(null), { noOfWorkScheduleRules: 0 });
+});
+
+test("buildDailyWorkSchedules returns noOfDailyWorkSchedules from count", () => {
+  // T550A has 4 distinct TPROG: STD8, BRKS, OVTM, MODF
+  assert.deepEqual(buildDailyWorkSchedules({ count: 4 }), { noOfDailyWorkSchedules: 4 });
+  assert.deepEqual(buildDailyWorkSchedules({}), { noOfDailyWorkSchedules: 0 });
+});
+
+test("buildPeriodWorkSchedules returns noOfPeriodWorkSchedules from count", () => {
+  // T551A has 4 distinct ZMODN: FLEX01, FLEX02, STD01, ZSHIFT01
+  assert.deepEqual(buildPeriodWorkSchedules({ count: 4 }), { noOfPeriodWorkSchedules: 4 });
+  assert.deepEqual(buildPeriodWorkSchedules({}), { noOfPeriodWorkSchedules: 0 });
+});
+
+test("buildWorkScheduleMapping nests SCHKZ -> ZMODN -> [TPROG] correctly", () => {
+  // Flat rows from SQL: (schkz, zmodn, tprogs[])
+  const rows = [
+    { schkz: "FLEX", zmodn: "FLEX01", tprogs: ["BRKS", "STD8"] },
+    { schkz: "FLEX", zmodn: "FLEX02", tprogs: ["OVTM"] },
+    { schkz: "STD", zmodn: "STD01", tprogs: ["STD8"] },
+    { schkz: "ZSHIFT", zmodn: "ZSHIFT01", tprogs: ["MODF"] },
+  ];
+  const result = buildWorkScheduleMapping(rows);
+  // 3 distinct SCHKZ
+  assert.equal(result.total, 3);
+  const flex = result.items.find((i) => i.schkz === "FLEX");
+  assert.ok(flex, "FLEX schkz missing");
+  assert.equal(flex.periods.length, 2);
+  const flex01 = flex.periods.find((p) => p.zmodn === "FLEX01");
+  assert.ok(flex01, "FLEX01 period missing");
+  assert.deepEqual(flex01.dailyWorkSchedules, ["BRKS", "STD8"]);
+  const flex02 = flex.periods.find((p) => p.zmodn === "FLEX02");
+  assert.ok(flex02, "FLEX02 period missing");
+  assert.deepEqual(flex02.dailyWorkSchedules, ["OVTM"]);
+  const std = result.items.find((i) => i.schkz === "STD");
+  assert.equal(std.periods[0].dailyWorkSchedules[0], "STD8");
+  const zshift = result.items.find((i) => i.schkz === "ZSHIFT");
+  assert.equal(zshift.periods[0].dailyWorkSchedules[0], "MODF");
+});
+
+test("buildWorkScheduleMapping returns empty items for empty input", () => {
+  const result = buildWorkScheduleMapping([]);
+  assert.equal(result.total, 0);
+  assert.deepEqual(result.items, []);
+});
+
+test("buildBreakSchedules returns unique counts of tprog, zmodn, schkz and items", () => {
+  // BRKS has BTBEG -> maps FLEX01 -> FLEX; add second row sharing tprog & zmodn to test unique counts
+  const rows = [
+    { tprog: "BRKS", zmodn: "FLEX01", schkz: "FLEX" },
+    { tprog: "BRKS", zmodn: "FLEX01", schkz: "FLEX2" },
+  ];
+  const result = buildBreakSchedules(rows);
+  assert.equal(result.total, 2);
+  assert.equal(result.noOfTprog, 1);
+  assert.equal(result.noOfZmodn, 1);
+  assert.equal(result.noOfSchkz, 2);
+  assert.deepEqual(result.items[0], { tprog: "BRKS", zmodn: "FLEX01", schkz: "FLEX" });
+});
+
+test("buildBreakSchedules returns empty list when no break schedules", () => {
+  const result = buildBreakSchedules([]);
+  assert.equal(result.total, 0);
+  assert.equal(result.noOfTprog, 0);
+  assert.equal(result.noOfZmodn, 0);
+  assert.equal(result.noOfSchkz, 0);
+  assert.deepEqual(result.items, []);
+});
+
+test("buildOvertimeSchedules returns unique counts of tprog, zmodn, schkz and items", () => {
+  // OVTM has SOBEG -> maps FLEX02 -> FLEX; add duplicate tprog/schkz across rows to test unique counts
+  const rows = [
+    { tprog: "OVTM", zmodn: "FLEX02", schkz: "FLEX" },
+    { tprog: "OVTM", zmodn: "FLEX03", schkz: "FLEX" },
+  ];
+  const result = buildOvertimeSchedules(rows);
+  assert.equal(result.total, 2);
+  assert.equal(result.noOfTprog, 1);
+  assert.equal(result.noOfZmodn, 2);
+  assert.equal(result.noOfSchkz, 1);
+  assert.deepEqual(result.items[0], { tprog: "OVTM", zmodn: "FLEX02", schkz: "FLEX" });
+});
+
+test("buildModifierSchedules returns unique counts of tprog, zmodn, schkz and items", () => {
+  // T550P M02->MODIFIER_X, T550A MOTPR=M02 is MODF -> ZSHIFT01 -> ZSHIFT
+  const rows = [
+    { tprog: "MODF", zmodn: "ZSHIFT01", schkz: "ZSHIFT" },
+    { tprog: "MOD2", zmodn: "ZSHIFT01", schkz: "ZSHIFT2" },
+  ];
+  const result = buildModifierSchedules(rows);
+  assert.equal(result.total, 2);
+  assert.equal(result.noOfTprog, 2);
+  assert.equal(result.noOfZmodn, 1);
+  assert.equal(result.noOfSchkz, 2);
+  assert.deepEqual(result.items[0], { tprog: "MODF", zmodn: "ZSHIFT01", schkz: "ZSHIFT" });
+});
+
+test("buildAttendanceAbsenceTypes separates std and custom by Z/Y/9 prefix", () => {
+  // T554S: 0100(A-std), 0200(A-std), Z001(A-custom), 0300(P-std), Y001(P-custom)
+  const input = {
+    std_absence_types: 2,
+    custom_absence_types: 1,
+    std_attendance_types: 1,
+    custom_attendance_types: 1,
+  };
+  const result = buildAttendanceAbsenceTypes(input);
+  assert.equal(result.absences.stdAbsenceTypes, 2);
+  assert.equal(result.absences.customAbsenceTypes, 1);
+  assert.equal(result.attendances.stdAttendanceTypes, 1);
+  assert.equal(result.attendances.customAttendanceTypes, 1);
+});
+
+test("buildAttendanceAbsenceTypes returns zeros on empty input", () => {
+  const result = buildAttendanceAbsenceTypes({});
+  assert.equal(result.absences.stdAbsenceTypes, 0);
+  assert.equal(result.absences.customAbsenceTypes, 0);
+  assert.equal(result.attendances.stdAttendanceTypes, 0);
+  assert.equal(result.attendances.customAttendanceTypes, 0);
+});
+
+test("buildUnusedAbsenceTypes returns unused absence subtypes with descriptions", () => {
+  // T554S absences: {0100, 0200, Z001}; PA2001 active: {0100} => unused: {0200, Z001}
+  const rows = [
+    { subty: "0200", atext: "Sick Leave" },
+    { subty: "Z001", atext: "Custom Sabbatical" },
+    { subty: "9001" },
+  ];
+  const result = buildUnusedAbsenceTypes(rows);
+  assert.equal(result.total, 3);
+  assert.deepEqual(result.items, [
+    { subtype: "0200", description: "Sick Leave" },
+    { subtype: "Z001", description: "Custom Sabbatical" },
+    { subtype: "9001", description: "NA" },
+  ]);
+});
+
+test("buildUnusedAbsenceTypes returns empty list when all absences are active", () => {
+  const result = buildUnusedAbsenceTypes([]);
+  assert.equal(result.total, 0);
+  assert.deepEqual(result.items, []);
+});
+
+test("buildUnusedAttendanceTypes returns unused attendance subtypes with descriptions", () => {
+  // T554S attendances: {0300, Y001}; PA2002 active: {0300} => unused: {Y001}
+  const rows = [{ subty: "Y001", atext: "Custom Training" }];
+  const result = buildUnusedAttendanceTypes(rows);
+  assert.equal(result.total, 1);
+  assert.deepEqual(result.items[0], { subtype: "Y001", description: "Custom Training" });
+});
+
+test("buildUnusedAttendanceTypes returns empty list when all attendances are active", () => {
+  const result = buildUnusedAttendanceTypes([]);
+  assert.equal(result.total, 0);
+  assert.deepEqual(result.items, []);
+});
+
+// ---------------------------------------------------------------------------
+// Header module unit tests (RFC_GET_SYSTEM_INFO / RFCSI_EXPORT)
+// ---------------------------------------------------------------------------
+
+test("normalizeSystemInfoResponse extracts and trims RFCSI_EXPORT fields", () => {
+  const direct = normalizeSystemInfoResponse({
+    RFCSI_EXPORT: {
+      RFCSYSID: " S4H ",
+      RFCOPSYS: "Linux ",
+      RFCDBSYS: "HDB",
+      RFCDEST: " S4HCLNT100 ",
+    },
+  });
+  assert.deepEqual(direct, {
+    RFCSYSID: "S4H",
+    RFCOPSYS: "Linux",
+    RFCDBSYS: "HDB",
+    RFCDEST: "S4HCLNT100",
+  });
+
+  const nested = normalizeSystemInfoResponse({
+    data: {
+      rfcsi_export: {
+        rfcsysid: "ECC",
+        rfcopsys: "Windows NT",
+        rfcdbsys: "MSSQL",
+        rfcdest: "",
+      },
+    },
+  });
+  assert.deepEqual(nested, {
+    RFCSYSID: "ECC",
+    RFCOPSYS: "Windows NT",
+    RFCDBSYS: "MSSQL",
+    RFCDEST: null,
+  });
+});
+
+test("normalizeSystemInfoResponse fails loudly when RFCSI_EXPORT is missing or invalid", () => {
+  assert.throws(() => normalizeSystemInfoResponse({}), /RFCSI_EXPORT/);
+  assert.throws(() => normalizeSystemInfoResponse(null), /RFCSI_EXPORT/);
+  assert.throws(() => normalizeSystemInfoResponse({ RFCSI_EXPORT: [] }), /RFCSI_EXPORT/);
+  assert.throws(() => normalizeSystemInfoResponse({ RFCSI_EXPORT: { OTHER: "x" } }), /none of RFCSYSID/);
+});
+
+test("buildSystemInfo maps staged RFCSI_EXPORT fields to output shape", () => {
+  assert.deepEqual(
+    buildSystemInfo({
+      rfcsysid: "S4H",
+      rfcopsys: "Linux",
+      rfcdbsys: "HDB",
+      rfcdest: "S4HCLNT100",
+    }),
+    {
+      systemName: "S4H",
+      operatingSystem: "Linux",
+      databaseSystem: "HDB",
+      logicalDestination: "S4HCLNT100",
+    },
+  );
+  assert.deepEqual(buildSystemInfo(null), {
+    systemName: null,
+    operatingSystem: null,
+    databaseSystem: null,
+    logicalDestination: null,
+  });
 });

@@ -224,6 +224,18 @@ export function getSourceTables() {
         { sap: "ATEXT", name: "atext", type: "text" },
       ],
     },
+    // EP6: T549BT holds feature titles (TITLE) keyed by FEATURE and FEATURE_LANGUAGE
+    {
+      key: "t549bt",
+      sap: "T549BT",
+      pg: "pe_t549bt",
+      required: ["feature_language", "feature"],
+      columns: [
+        { sap: "FEATURE_LANGUAGE", name: "feature_language", type: "text" },
+        { sap: "FEATURE", name: "feature", type: "text" },
+        { sap: "TITLE", name: "title", type: "text" },
+      ],
+    },
   ];
 }
 

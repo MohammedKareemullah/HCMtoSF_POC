@@ -18,12 +18,17 @@ sap-kpi-backend/
 │   ├── server.js                    migrate, start listening, graceful shutdown
 │   ├── app.js                       createApp(): CORS, JSON, /health, modules, 404, errors
 │   ├── config/{env.js, db.js}       env parsing; pg pool + helpers
-│   ├── db/{migrate.js, migrations/} migration runner + 001_init.sql, 002_t500p_persa.sql
+│   ├── db/{migrate.js, migrations/} migration runner + 001_init.sql .. 016_tm_t554t.sql
 │   ├── integrations/mcp/            mcpClient.js, sapTools.js, sapTableReader.js
 │   ├── modules/
 │   │   ├── index.js                 registerModules(app): one line per KPI section
 │   │   ├── headcount/               headcount KPI section (see 3.1)
-│   │   └── hcm_core/                HCM core infotype metadata KPI section (see 3.2)
+│   │   ├── hcm_core/                HCM core infotype metadata KPI section (see 3.2)
+│   │   ├── pa/                      PA KPI section
+│   │   ├── om/                      OM KPI section
+│   │   ├── pe/                      PE KPI section
+│   │   ├── tm/                      TM KPI section (see 3.3)
+│   │   └── header/                  SAP system header metadata module (see 3.4)
 │   └── shared/
 │       ├── data/countryNames.js     generated: 229 country codes → SAP names
 │       ├── db/bulkInsert.js         unnest-based multi-row insert
@@ -68,6 +73,32 @@ Unmatched → `notFound` (404). Any thrown/rejected error → `errorHandler`.
 | `hcm_core.service.js` | `syncHcmCore()`, `coordinator` (SyncCoordinator singleton), `getSyncStatus()`, KPI getters |
 | `hcm_core.controller.js` | `ensureFresh` middleware, handlers, response envelope helper |
 | `hcm_core.routes.js` | Route table for `/api/hcm-core/*` |
+
+### 3.3 TM module (`src/modules/tm/`)
+
+| File | Responsibility |
+|---|---|
+| `tm.constants.js` | `MODULE_NAME="tm"`; `getSourceTables()` for `T508A`, `T550A`, `T551A`, `T550P`, `T554S`, `PA2001`, `PA2002` |
+| `tm.fetcher.js` | `fetchTmSource()`: reads all 7 SAP tables via `readSapTable` with `mapLimit` concurrency |
+| `tm.loader.js` | `replaceStaging(source)`: one transaction: `TRUNCATE`, convert values (`text`/`date`), `bulkInsert` into `tm_*` tables |
+| `tm.repository.js` | All SQL for TM: distinct schedule counts, `TPROG -> ZMODN -> SCHKZ` mapping joins, break/overtime/modifier filters, `T554S` classification, 24m `PA2001`/`PA2002` active checks |
+| `tm.processor.js` | Pure shaping: nested `SCHKZ -> periods -> dailyWorkSchedules` builder, schedule list DTOs, absence/attendance breakdown |
+| `tm.service.js` | `syncTm()`, `coordinator` (`SyncCoordinator` singleton), `getSyncStatus()`, 10 KPI getters |
+| `tm.controller.js` | `ensureFresh` middleware, handlers, response envelope helper |
+| `tm.routes.js` | Route table for `/api/tm/*` |
+
+### 3.4 Header module (`src/modules/header/`)
+
+| File | Responsibility |
+|---|---|
+| `header.constants.js` | `MODULE_NAME="header"`; `RFC_FUNCTION="RFC_GET_SYSTEM_INFO"`, `RFC_PARAMETERS={ DESTINATION: "" }`, `hdr_system_info` column map |
+| `header.fetcher.js` | `fetchHeaderSource()`: calls `sapFunctionCall("RFC_GET_SYSTEM_INFO", { DESTINATION: "" })`, validates & extracts `RFCSI_EXPORT` (`RFCSYSID`, `RFCOPSYS`, `RFCDBSYS`, `RFCDEST`) |
+| `header.loader.js` | `replaceStaging(source)`: one transaction: `TRUNCATE hdr_system_info`, `bulkInsert` staged system info row |
+| `header.repository.js` | `getSystemInfo()`: reads staged `rfcsysid, rfcopsys, rfcdbsys, rfcdest` from `hdr_system_info` |
+| `header.processor.js` | `buildSystemInfo()`: shapes row into `{ systemName, operatingSystem, databaseSystem, logicalDestination }` |
+| `header.service.js` | `syncHeader()`, `coordinator` (`SyncCoordinator` singleton), `getSyncStatus()`, `getSystemInfo()` |
+| `header.controller.js` | `ensureFresh` middleware, handlers, response envelope helper |
+| `header.routes.js` | Route table for `/api/header/*` |
 
 Shared code: `src/shared/sync/syncCoordinator.js` (freshness logic, see SYSTEM_ARCHITECTURE.md section 6), `syncRuns.repository.js` (insert/update/read `sync_runs`, `failInterruptedRuns`),
 `src/shared/utils/countryName.js` (SAP list → ICU `Intl.DisplayNames` fallback → raw code; empty → "Unknown"), `sapValues.js` (`cleanText`, `sapDate`, `convertValue`), `concurrency.js` (`mapLimit`),
@@ -370,8 +401,8 @@ Sample response:
 | GET | `/api/om/object-types` | Count of standard (not starting with 9) vs custom (starts with 9) OM object types from T778O |
 | GET | `/api/om/relationships` | Count of standard vs custom (starts with Z or 900–999) OM relationships from T778V |
 | GET | `/api/om/evaluation-paths` | Count of standard vs custom (starts with Z) OM evaluation paths from T778A |
-| GET | `/api/om/objects-per-plan-version` | Count of objects (OTYPE from HRP1000) grouped by plan version (PLVAR) with description (PTEXT from T777P with SPRAS='E') |
-| GET | `/api/om/relationships-per-plan-version` | Count of relationships (RELAT from HRP1001) grouped by plan version (PLVAR) with description (PTEXT from T777P with SPRAS='E') |
+| GET | `/api/om/objects-per-plan-version` | Count of objects (OTYPE from HRP1000) grouped by plan version (PLVAR) with description (PTEXT from T777P with LANGU='E') |
+| GET | `/api/om/relationships-per-plan-version` | Count of relationships (RELAT from HRP1001) grouped by plan version (PLVAR) with description (PTEXT from T777P with LANGU='E') |
 | GET | `/api/om/auth-profiles` | Count of assigned vs unassigned structural authorization profiles from T77PQ mapped to T77UA |
 
 #### `GET /api/om/object-types`
@@ -698,7 +729,201 @@ Sample response:
 }
 ```
 
-### 4.11 Errors
+### 4.11 KPI section 6: TM (Time Management)
+
+Sync control:
+- `POST /api/tm/sync` — trigger fetch of all 8 TM tables from SAP now (`T508A`, `T550A`, `T551A`, `T550P`, `T554S`, `T554T`, `PA2001`, `PA2002`).
+- `GET /api/tm/sync/status` — returns `{ syncing, syncedSinceServerStart, lastSuccess, latestRun }`.
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/api/tm/work-schedule-rules` | Distinct count of work schedule rules (`SCHKZ`) from `T508A` |
+| GET | `/api/tm/daily-work-schedules` | Distinct count of daily work schedules (`TPROG`) from `T550A` |
+| GET | `/api/tm/period-work-schedules` | Distinct count of period work schedules (`ZMODN`) from `T551A` |
+| GET | `/api/tm/work-schedule-mapping` | Nested hierarchy `SCHKZ -> periods (ZMODN) -> dailyWorkSchedules (TPROG)` |
+| GET | `/api/tm/break-schedules` | Break-enabled `TPROG` schedules (`BTBEG`/`BTEND`/`ETBEG`/`ETEND` non-empty) mapped to `ZMODN` and `SCHKZ`, plus unique counts |
+| GET | `/api/tm/overtime-schedules` | Overtime-enabled `TPROG` schedules (`SOBEG`/`SOEND` non-empty) mapped to `ZMODN` and `SCHKZ`, plus unique counts |
+| GET | `/api/tm/modifier-schedules` | Modifier-linked `TPROG` schedules (`T550P.MOTPR = T550A.MOTPR`) mapped to `ZMODN` and `SCHKZ`, plus unique counts |
+| GET | `/api/tm/attendance-absence-types` | Standard vs custom (`Z`, `Y`, `9` prefix) counts for absence (`ART01='A'`) and attendance (`ART01='P'`) subtypes |
+| GET | `/api/tm/unused-absence-types` | `T554S` absence subtypes absent from active `PA2001` records (last 24 months) with `T554T.ATEXT` descriptions |
+| GET | `/api/tm/unused-attendance-types` | `T554S` attendance subtypes absent from active `PA2002` records (last 24 months) with `T554T.ATEXT` descriptions |
+
+#### `GET /api/tm/work-schedule-rules`
+Sample response (from mock data):
+```json
+{
+  "data": { "noOfWorkScheduleRules": 3 },
+  "meta": { "lastSyncedAt": "2026-11-11T14:00:00.000Z", "stale": false }
+}
+```
+
+#### `GET /api/tm/daily-work-schedules`
+Sample response (from mock data):
+```json
+{
+  "data": { "noOfDailyWorkSchedules": 4 },
+  "meta": { "lastSyncedAt": "2026-11-11T14:00:00.000Z", "stale": false }
+}
+```
+
+#### `GET /api/tm/period-work-schedules`
+Sample response (from mock data):
+```json
+{
+  "data": { "noOfPeriodWorkSchedules": 4 },
+  "meta": { "lastSyncedAt": "2026-11-11T14:00:00.000Z", "stale": false }
+}
+```
+
+#### `GET /api/tm/work-schedule-mapping`
+Sample response (from mock data):
+```json
+{
+  "data": {
+    "total": 3,
+    "items": [
+      {
+        "schkz": "FLEX",
+        "periods": [
+          { "zmodn": "FLEX01", "dailyWorkSchedules": ["BRKS", "STD8"] },
+          { "zmodn": "FLEX02", "dailyWorkSchedules": ["OVTM"] }
+        ]
+      },
+      {
+        "schkz": "STD",
+        "periods": [
+          { "zmodn": "STD01", "dailyWorkSchedules": ["STD8"] }
+        ]
+      },
+      {
+        "schkz": "ZSHIFT",
+        "periods": [
+          { "zmodn": "ZSHIFT01", "dailyWorkSchedules": ["MODF"] }
+        ]
+      }
+    ]
+  },
+  "meta": { "lastSyncedAt": "2026-11-11T14:00:00.000Z", "stale": false }
+}
+```
+
+#### `GET /api/tm/break-schedules`
+Sample response (from mock data):
+```json
+{
+  "data": {
+    "total": 1,
+    "noOfTprog": 1,
+    "noOfZmodn": 1,
+    "noOfSchkz": 1,
+    "items": [
+      { "tprog": "BRKS", "zmodn": "FLEX01", "schkz": "FLEX" }
+    ]
+  },
+  "meta": { "lastSyncedAt": "2026-11-11T14:00:00.000Z", "stale": false }
+}
+```
+
+#### `GET /api/tm/overtime-schedules`
+Sample response (from mock data):
+```json
+{
+  "data": {
+    "total": 1,
+    "noOfTprog": 1,
+    "noOfZmodn": 1,
+    "noOfSchkz": 1,
+    "items": [
+      { "tprog": "OVTM", "zmodn": "FLEX02", "schkz": "FLEX" }
+    ]
+  },
+  "meta": { "lastSyncedAt": "2026-11-11T14:00:00.000Z", "stale": false }
+}
+```
+
+#### `GET /api/tm/modifier-schedules`
+Sample response (from mock data):
+```json
+{
+  "data": {
+    "total": 1,
+    "noOfTprog": 1,
+    "noOfZmodn": 1,
+    "noOfSchkz": 1,
+    "items": [
+      { "tprog": "MODF", "zmodn": "ZSHIFT01", "schkz": "ZSHIFT" }
+    ]
+  },
+  "meta": { "lastSyncedAt": "2026-11-11T14:00:00.000Z", "stale": false }
+}
+```
+
+#### `GET /api/tm/attendance-absence-types`
+Sample response (from mock data):
+```json
+{
+  "data": {
+    "absences": { "stdAbsenceTypes": 2, "customAbsenceTypes": 1 },
+    "attendances": { "stdAttendanceTypes": 1, "customAttendanceTypes": 1 }
+  },
+  "meta": { "lastSyncedAt": "2026-11-11T14:00:00.000Z", "stale": false }
+}
+```
+
+#### `GET /api/tm/unused-absence-types`
+Sample response (from mock data):
+```json
+{
+  "data": {
+    "total": 2,
+    "items": [
+      { "subtype": "0200", "description": "Sick Leave" },
+      { "subtype": "Z001", "description": "Custom Sabbatical" }
+    ]
+  },
+  "meta": { "lastSyncedAt": "2026-11-11T14:00:00.000Z", "stale": false }
+}
+```
+
+#### `GET /api/tm/unused-attendance-types`
+Sample response (from mock data):
+```json
+{
+  "data": {
+    "total": 1,
+    "items": [
+      { "subtype": "Y001", "description": "Custom Training" }
+    ]
+  },
+  "meta": { "lastSyncedAt": "2026-11-11T14:00:00.000Z", "stale": false }
+}
+```
+
+### 4.12 Header module (`/api/header`)
+
+Sync control:
+- `POST /api/header/sync` — execute `RFC_GET_SYSTEM_INFO` (`{ DESTINATION: "" }`) via `sap_function_call` and stage `RFCSI_EXPORT`.
+- `GET /api/header/sync/status` — returns `{ syncing, syncedSinceServerStart, lastSuccess, latestRun }`.
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/api/header/system-info` (also `/api/header`) | System Name (`RFCSYSID`), Operating System (`RFCOPSYS`), Database System (`RFCDBSYS`), and Logical Destination (`RFCDEST`) from `RFCSI_EXPORT` |
+
+#### `GET /api/header/system-info`
+Sample response (from mock data):
+```json
+{
+  "data": {
+    "systemName": "S4H",
+    "operatingSystem": "Linux",
+    "databaseSystem": "HDB",
+    "logicalDestination": "S4HCLNT100"
+  },
+  "meta": { "lastSyncedAt": "2026-11-11T16:30:00.000Z", "stale": false }
+}
+```
+
+### 4.13 Errors
 
 `{ "error": { "code": "<CODE>", "message": "...", "details"?: ... } }`
 

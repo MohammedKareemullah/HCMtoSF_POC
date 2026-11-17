@@ -117,7 +117,8 @@ export async function getCompanyFeaturesSummary() {
 
 /**
  * 6. Feature Functions: from T549D where FUNID = 'P', group by NAMEN,
- * list unique functions (drop number suffix after space).
+ * list unique functions (drop number suffix after space), and map T549B-NAMEN = T549BT-FEATURE
+ * (filtered by FEATURE_LANGUAGE = 'E') to include TITLE as feature_name.
  */
 export async function getFeatureFunctions() {
   const { rows } = await query(
@@ -129,14 +130,35 @@ export async function getFeatureFunctions() {
        WHERE funid = 'P'
          AND namen IS NOT NULL AND namen <> ''
          AND funct IS NOT NULL AND funct <> ''
+     ),
+     grouped AS (
+       SELECT
+         namen,
+         COUNT(func_name)::int AS no_of_functions,
+         array_agg(func_name ORDER BY func_name) AS functions
+       FROM cleaned
+       GROUP BY namen
+     ),
+     b_features AS (
+       SELECT DISTINCT namen
+       FROM pe_t549b
+       WHERE namen IS NOT NULL AND namen <> ''
+     ),
+     titles AS (
+       SELECT DISTINCT ON (feature) feature, title
+       FROM pe_t549bt
+       WHERE feature_language = 'E' AND feature IS NOT NULL AND feature <> ''
+       ORDER BY feature, title
      )
      SELECT
-       namen,
-       COUNT(func_name)::int AS no_of_functions,
-       array_agg(func_name ORDER BY func_name) AS functions
-     FROM cleaned
-     GROUP BY namen
-     ORDER BY namen;`
+       g.namen,
+       COALESCE(t.title, 'NA') AS feature_name,
+       g.no_of_functions,
+       g.functions
+     FROM grouped g
+     LEFT JOIN b_features b ON b.namen = g.namen
+     LEFT JOIN titles t ON t.feature = b.namen
+     ORDER BY g.namen;`
   );
   return rows;
 }

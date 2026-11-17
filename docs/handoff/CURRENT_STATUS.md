@@ -1,6 +1,6 @@
 # Current Project Status
 
-Status date: 2026-11-08. Legend: **VERIFIED (mock)** = covered by the automated tests / live run against the mock MCP server. **UNVERIFIED (real SAP)** = never run against the real Hypercare MCP/SAP.
+Status date: 2026-11-11. Legend: **VERIFIED (mock)** = covered by the automated tests / live run against the mock MCP server. **UNVERIFIED (real SAP)** = never run against the real Hypercare MCP/SAP.
 
 ## 1. Fully implemented features
 
@@ -31,8 +31,8 @@ Status date: 2026-11-08. Legend: **VERIFIED (mock)** = covered by the automated 
 | OM KPI 1: object types standard vs custom (starts with 9) from T778O | unit + e2e |
 | OM KPI 2: relationships standard vs custom (starts with Z or 900–999) from T778V | unit + e2e |
 | OM KPI 3: evaluation paths standard vs custom (starts with Z) from T778A | unit + e2e |
-| OM KPI 4: objects per plan version from HRP1000 + T777P (SPRAS='E') | unit + e2e |
-| OM KPI 5: relationships per plan version from HRP1001 + T777P (SPRAS='E') | unit + e2e |
+| OM KPI 4: objects per plan version from HRP1000 + T777P (LANGU='E') | unit + e2e |
+| OM KPI 5: relationships per plan version from HRP1001 + T777P (LANGU='E') | unit + e2e |
 | OM KPI 6: assigned vs unassigned structural authorization profiles from T77PQ + T77UA | unit + e2e |
 | PE KPI 1: payroll area summary (std vs custom starting with Z/Y from T549A) | unit + e2e |
 | PE KPI 2: period parameter summary (std vs custom 50–99 from T549R) | unit + e2e |
@@ -49,10 +49,21 @@ Status date: 2026-11-08. Legend: **VERIFIED (mock)** = covered by the automated 
 | PE KPI 13: payroll functions and operations summary (T52A0 OTYPE='FU' / 'OP') | unit + e2e |
 | PE KPI 14: custom functions and operations (T52A0 ONAME starting with Z or Y) | unit + e2e |
 | PE KPI 15: unused payroll areas (T599B absent from HRPY_RGDIR within last 24m) | unit + e2e |
+| TM KPI 1: distinct work schedule rules (`SCHKZ`) from `T508A` | unit (processor) |
+| TM KPI 2: distinct daily work schedules (`TPROG`) from `T550A` | unit (processor) |
+| TM KPI 3: distinct period work schedules (`ZMODN`) from `T551A` | unit (processor) |
+| TM KPI 4: nested work schedule mapping (`SCHKZ -> ZMODN -> [TPROG]`) from `T508A` + `T551A` | unit (processor) |
+| TM KPI 5: break schedules (`BTBEG`/`BTEND`/`ETBEG`/`ETEND` non-empty) mapped to `ZMODN` and `SCHKZ` | unit (processor) |
+| TM KPI 6: overtime schedules (`SOBEG`/`SOEND` non-empty) mapped to `ZMODN` and `SCHKZ` | unit (processor) |
+| TM KPI 7: modifier schedules (`T550P.MOTPR = T550A.MOTPR`) mapped to `ZMODN` and `SCHKZ` | unit (processor) |
+| TM KPI 8: attendance & absence types standard vs custom (`Z`/`Y`/`9`) from `T554S` | unit (processor) |
+| TM KPI 9: unused absence types (`T554S` `ART01='A'` absent from active `PA2001` within 24m) | unit (processor) |
+| TM KPI 10: unused attendance types (`T554S` `ART01='P'` absent from active `PA2002` within 24m) | unit (processor) |
+| Header: `RFC_GET_SYSTEM_INFO` (`{ DESTINATION: "" }`) via `sap_function_call` returning `RFCSI_EXPORT` (`systemName`, `operatingSystem`, `databaseSystem`, `logicalDestination`) | unit (fetcher + processor) |
 | `/overview` aggregate, `/sync`, `/sync/status` | e2e |
 | Mock MCP server + synthetic dataset; `inspect:table` diagnostic | used by tests / scripts |
 
-Test totals: **42 unit pass** (on Node 22 without Postgres) + full e2e suites (`headcount.e2e.test.js`, `hcm_core.e2e.test.js`, `pa.e2e.test.js`, `om.e2e.test.js`, `pe.e2e.test.js`).
+Test totals: **59 unit pass** (verified on Node 20 without Postgres) + e2e suites (`headcount.e2e.test.js`, `hcm_core.e2e.test.js`, `pa.e2e.test.js`, `om.e2e.test.js`, `pe.e2e.test.js`, `header.e2e.test.js`; no `tm.e2e.test.js` written yet).
 
 ## 2. Implemented but UNVERIFIED against the real system
 

@@ -2,11 +2,11 @@
 
 ## 1. Where work stopped
 
-**Last feature worked on:** implemented the fifth KPI section **pe** and schema corrections (payroll areas std vs custom from T549A, period parameters std vs custom from T549R, employees per payroll area from PA0001 with deduplicated PERNR, payroll areas per period parameter from T549A + T549N SPRAS='E', company features std vs custom from T549B/T549C, feature functions from T549D with number suffix removed, wage type summary std vs custom from T512W, wage types per country from T512W + T500T with SPRAS='E', active wage types within 24m across PA0008 LGA01–40, PA0014, PA0015, PA0267 mapped to T512T English text, and OM plan version endpoints updated to T777P with SPRAS='E'). Added migrations `007_pe.sql` and `008_t500t_t777p.sql`, mock datasets in `mock/mockData.js`, unit tests in `tests/unit.test.js` (33/33 pass), and e2e test suites.
+**Last feature worked on:** implemented the **header** module (`src/modules/header/*`, migration `013_header.sql`, `/api/header/system-info`) which calls `RFC_GET_SYSTEM_INFO` via MCP `sapFunctionCall` with `{ DESTINATION: "" }`, extracts `RFCSI_EXPORT` (`RFCSYSID`, `RFCOPSYS`, `RFCDBSYS`, `RFCDEST`), stages it in `hdr_system_info`, and returns `{ systemName, operatingSystem, databaseSystem, logicalDestination }`. Added `sap_function_call` mock support, 3 unit tests (`59/59` unit tests pass), and `tests/header.e2e.test.js`.
 
-Previously implemented: **headcount** (migration 001/002), **hcm_core** (migration 003/004), **pa** (migration 005), and **om** (migration 006). Note that the owner mentioned more endpoints are yet to come in this PE section.
+Previously implemented: **headcount** (migration 001/002), **hcm_core** (migration 003/004), **pa** (migration 005), **om** (migration 006/008), **pe** (migration 007/008/009/010/011), and **tm** (migration 012; `tm.e2e.test.js` not yet written).
 
-After that, the owner asked only for this handoff documentation. There is **no half-written code**: nothing is in progress in the source tree.
+After that, the owner asked only for updating `README.md` and `docs/handoff/*` for the TM module. There is **no half-written code**: nothing is in progress in the source tree.
 
 **Not yet known (blocking real confidence):** whether the owner has applied the patch, and whether they have run the backend against the real MCP server. Their messages suggest they know the SAP schema, but no real-run output, error log or real response sample has ever been shared.
 Treat the whole SAP-facing path as unproven until section 2 is done.

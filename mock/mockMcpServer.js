@@ -1,6 +1,6 @@
 import http from "node:http";
 import crypto from "node:crypto";
-import { MOCK_TABLES } from "./mockData.js";
+import { MOCK_TABLES, MOCK_FUNCTIONS } from "./mockData.js";
 
 /** Verify an HS256 JWT exactly like a real server would. Returns the payload or throws. */
 function verifyJwt(token, secret) {
@@ -46,11 +46,23 @@ export function startMockMcp({ secret = "mock-secret", port = 0 } = {}) {
 
       const rpc = JSON.parse(body);
       const { name, arguments: args = {} } = rpc.params ?? {};
-      calls.push({ tool: name, table: args.table, rowCount: args.rowCount, rowSkips: args.rowSkips ?? 0 });
+      calls.push({
+        tool: name,
+        table: args.table,
+        functionName: args.functionName,
+        parameters: args.parameters,
+        rowCount: args.rowCount,
+        rowSkips: args.rowSkips ?? 0,
+      });
 
       let result;
       if (name === "sap_connection_check") {
         result = textResult({ connected: true });
+      } else if (name === "sap_function_call") {
+        const fnData = MOCK_FUNCTIONS[args.functionName];
+        result = fnData
+          ? textResult(fnData)
+          : textResult(`Function ${args.functionName} not found`, true);
       } else if (name === "sap_table_read") {
         const data = MOCK_TABLES[args.table];
         if (!data) {

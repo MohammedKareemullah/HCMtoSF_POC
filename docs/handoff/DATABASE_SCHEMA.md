@@ -166,6 +166,13 @@ Indexes: `hc_pa0000_pernr_idx (pernr)`, `hc_pa0000_massn_idx (massn)`. Multiple 
 | `src/db/migrations/007_pe.sql` | PE staging tables: `pe_t549a`, `pe_t549r`, `pe_pa0001`, `pe_t549n`, `pe_t549b`, `pe_t549c`, `pe_t549d`, `pe_t512w`, `pe_t500l`, `pe_pa0008`, `pe_pa0014`, `pe_pa0015`, `pe_pa0267`, `pe_t512t` + indexes |
 | `src/db/migrations/008_t500t_t777p.sql` | Replace T500L with `pe_t500t` (`spras, molga, ltext`) and T778P with `om_t777p` (`spras, plvar, ptext`) + indexes |
 | `src/db/migrations/009_pe_ext.sql` | PE extension tables: `pe_t52c0`, `pe_t52c1`, `pe_t52c5`, `pe_t52a0`, `pe_t599b`, `pe_hrpy_rgdir` + indexes |
+| `src/db/migrations/010_pe_t52a0_t.sql` | PE functions/operations text table: `pe_t52a0_t` + index |
+| `src/db/migrations/011_pe_t549t.sql` | PE payroll area description table: `pe_t549t` + index |
+| `src/db/migrations/012_tm.sql` | TM staging tables: `tm_t508a`, `tm_t550a`, `tm_t551a`, `tm_t550p`, `tm_t554s`, `tm_pa2001`, `tm_pa2002` + indexes |
+| `src/db/migrations/013_header.sql` | Header staging table: `hdr_system_info` (`rfcsysid`, `rfcopsys`, `rfcdbsys`, `rfcdest`) |
+| `src/db/migrations/014_om_t777p_langu.sql` | Rename `om_t777p.spras` -> `langu` (`T777P` language key is `LANGU`) and rename index |
+| `src/db/migrations/015_pe_t549bt.sql` | PE feature titles table: `pe_t549bt` (`feature_language`, `feature`, `title`) + index |
+| `src/db/migrations/016_tm_t554t.sql` | TM attendance/absence text table: `tm_t554t` (`awart`, `atext`) + index |
 
 Runner (`src/db/migrate.js`): ensures the database exists (on error `3D000` connects to `PG_ADMIN_DATABASE` and runs `CREATE DATABASE`), creates `schema_migrations`, then applies every
 not-yet-applied `*.sql` in filename order, **each in its own transaction**, recording it. Runs automatically on `npm start`; manually via `npm run db:setup`.
@@ -378,9 +385,9 @@ SELECT
   COUNT(*)::int AS total
 FROM (SELECT DISTINCT wegid FROM om_t778a WHERE wegid IS NOT NULL AND wegid <> '') t;
 
--- 4. Objects per plan version from HRP1000 + T777P (SPRAS = 'E')
+-- 4. Objects per plan version from HRP1000 + T777P (LANGU = 'E')
 WITH ptexts AS (
-  SELECT DISTINCT ON (plvar) plvar, ptext FROM om_t777p WHERE spras = 'E' AND plvar IS NOT NULL ORDER BY plvar
+  SELECT DISTINCT ON (plvar) plvar, ptext FROM om_t777p WHERE langu = 'E' AND plvar IS NOT NULL ORDER BY plvar
 ),
 obj_counts AS (
   SELECT plvar, COUNT(*)::int AS object_count
@@ -390,9 +397,9 @@ obj_counts AS (
 SELECT o.plvar, COALESCE(p.ptext, 'NA') AS ptext, o.object_count AS no_of_objects
 FROM obj_counts o LEFT JOIN ptexts p ON p.plvar = o.plvar ORDER BY o.plvar;
 
--- 5. Relationships per plan version from HRP1001 + T777P (SPRAS = 'E')
+-- 5. Relationships per plan version from HRP1001 + T777P (LANGU = 'E')
 WITH ptexts AS (
-  SELECT DISTINCT ON (plvar) plvar, ptext FROM om_t777p WHERE spras = 'E' AND plvar IS NOT NULL ORDER BY plvar
+  SELECT DISTINCT ON (plvar) plvar, ptext FROM om_t777p WHERE langu = 'E' AND plvar IS NOT NULL ORDER BY plvar
 ),
 rel_counts AS (
   SELECT plvar, COUNT(*)::int AS relationship_count
@@ -565,6 +572,72 @@ WITH active AS (
 SELECT t.abkrs, t.endda FROM pe_t599b t
 WHERE t.abkrs IS NOT NULL AND t.abkrs <> '' AND t.abkrs NOT IN (SELECT abkrs FROM active)
 ORDER BY t.abkrs;
+
+-- ---------------------------------------------------------------------------
+-- TM module queries (src/modules/tm/tm.repository.js)
+-- ---------------------------------------------------------------------------
+
+-- 1. Count distinct work schedule rules (SCHKZ) from T508A
+SELECT COUNT(DISTINCT schkz)::int AS count FROM tm_t508a WHERE schkz IS NOT NULL AND schkz <> '';
+
+-- 2. Count distinct daily work schedules (TPROG) from T550A
+SELECT COUNT(DISTINCT tprog)::int AS count FROM tm_t550a WHERE tprog IS NOT NULL AND tprog <> '';
+
+-- 3. Count distinct period work schedules (ZMODN) from T551A
+SELECT COUNT(DISTINCT zmodn)::int AS count FROM tm_t551a WHERE zmodn IS NOT NULL AND zmodn <> '';
+
+-- 4. Work schedule mapping (T551A TPRG1..TPRG7 -> ZMODN -> T508A SCHKZ)
+WITH tprogs AS (
+  SELECT DISTINCT zmodn,
+    unnest(ARRAY[tprg1,tprg2,tprg3,tprg4,tprg5,tprg6,tprg7]) AS tprog
+  FROM tm_t551a WHERE zmodn IS NOT NULL AND zmodn <> ''
+),
+valid_tprogs AS (
+  SELECT zmodn, tprog FROM tprogs WHERE tprog IS NOT NULL AND tprog <> ''
+),
+zmodn_tprogs AS (
+  SELECT zmodn, array_agg(DISTINCT tprog ORDER BY tprog) AS tprogs
+  FROM valid_tprogs GROUP BY zmodn
+),
+schkz_zmodn AS (
+  SELECT DISTINCT schkz, zmodn FROM tm_t508a
+  WHERE schkz IS NOT NULL AND schkz <> '' AND zmodn IS NOT NULL AND zmodn <> ''
+)
+SELECT s.schkz, s.zmodn, COALESCE(zt.tprogs, '{}') AS tprogs
+FROM schkz_zmodn s LEFT JOIN zmodn_tprogs zt ON zt.zmodn = s.zmodn
+ORDER BY s.schkz, s.zmodn;
+
+-- 5 & 6. Break schedules (BTBEG/BTEND/ETBEG/ETEND non-empty) and Overtime schedules (SOBEG/SOEND non-empty)
+-- Filter tm_t550a, join unnested tm_t551a (tprog -> zmodn), join tm_t508a (zmodn -> schkz)
+
+-- 7. Modifier schedules (T550P.MOTPR = T550A.MOTPR -> ZMODN -> SCHKZ)
+-- Join tm_t550p + tm_t550a on motpr, then tm_t551a and tm_t508a
+
+-- 8. Attendance and absence type counts from T554S (custom starts with Z, Y, or 9)
+SELECT
+  COUNT(*) FILTER (WHERE art01 = 'A' AND NOT (upper(subty) LIKE 'Z%' OR upper(subty) LIKE 'Y%' OR subty LIKE '9%'))::int AS std_absence_types,
+  COUNT(*) FILTER (WHERE art01 = 'A' AND (upper(subty) LIKE 'Z%' OR upper(subty) LIKE 'Y%' OR subty LIKE '9%'))::int AS custom_absence_types,
+  COUNT(*) FILTER (WHERE art01 = 'P' AND NOT (upper(subty) LIKE 'Z%' OR upper(subty) LIKE 'Y%' OR subty LIKE '9%'))::int AS std_attendance_types,
+  COUNT(*) FILTER (WHERE art01 = 'P' AND (upper(subty) LIKE 'Z%' OR upper(subty) LIKE 'Y%' OR subty LIKE '9%'))::int AS custom_attendance_types
+FROM tm_t554s WHERE subty IS NOT NULL AND subty <> '' AND art01 IN ('A', 'P');
+
+-- 9 & 10. Unused absence (ART01='A' vs PA2001) and attendance (ART01='P' vs PA2002) subtypes (last 24m) + T554T ATEXT
+WITH active AS (
+  SELECT DISTINCT subty FROM tm_pa2001
+  WHERE begda <= CURRENT_DATE AND endda >= (CURRENT_DATE - INTERVAL '24 months')
+    AND subty IS NOT NULL AND subty <> ''
+),
+unused_types AS (
+  SELECT DISTINCT subty FROM tm_t554s
+  WHERE art01 = 'A' AND subty IS NOT NULL AND subty <> ''
+    AND subty NOT IN (SELECT subty FROM active)
+),
+texts AS (
+  SELECT DISTINCT ON (awart) awart, atext FROM tm_t554t
+  WHERE awart IS NOT NULL AND awart <> '' ORDER BY awart, atext
+)
+SELECT u.subty, COALESCE(t.atext, 'NA') AS atext
+FROM unused_types u LEFT JOIN texts t ON t.awart = u.subty ORDER BY u.subty;
 ```
 
 Known SQL gotchas: the `ILIKE $4 || '%'` search does not escape `%`/`_` typed by the user; PERNR in SAP data is zero-padded (a prefix search needs the leading zeros).

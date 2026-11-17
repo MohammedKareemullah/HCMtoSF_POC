@@ -159,8 +159,8 @@ test("pe: feature functions groups FUNID='P' functions and cleans suffixes", asy
   const { data } = body;
   assert.equal(data.total, 2);
   assert.deepEqual(data.items, [
-    { feature: "NUMKR", noOfFunctions: 1, functions: ["NUMGEN"] },
-    { feature: "TARIF", noOfFunctions: 2, functions: ["CALC", "CHECK"] },
+    { feature: "NUMKR", featureName: "Number Range Intervals", noOfFunctions: 1, functions: ["NUMGEN"] },
+    { feature: "TARIF", featureName: "Pay Scale Group/Level Default", noOfFunctions: 2, functions: ["CALC", "CHECK"] },
   ]);
 });
 

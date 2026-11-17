@@ -126,6 +126,31 @@ The turn-5 patch touched: `README.md`, `.env.example`, `src/config/env.js`, `src
    - Added migration `008_t500t_t777p.sql` creating `pe_t500t` and `om_t777p` with indexes.
    - Updated `pe.constants.js`, `pe.repository.js`, `om.constants.js`, `om.repository.js`, `mockData.js`, tests, and documentation.
 
+### 4.6 TM (Time Management) Module
+   - Implemented KPI section 6 (**tm**) delivering 10 KPI endpoints + 2 sync endpoints:
+     1. `GET /api/tm/work-schedule-rules` (distinct `SCHKZ` from `T508A`).
+     2. `GET /api/tm/daily-work-schedules` (distinct `TPROG` from `T550A`).
+     3. `GET /api/tm/period-work-schedules` (distinct `ZMODN` from `T551A`).
+     4. `GET /api/tm/work-schedule-mapping` (`T551A` `TPRG1`–`TPRG7` + `T508A` nested as `SCHKZ -> ZMODN -> [TPROG]`).
+     5. `GET /api/tm/break-schedules` (`T550A` rows with non-empty `BTBEG`/`BTEND`/`ETBEG`/`ETEND` mapped via `ZMODN` to `SCHKZ`).
+     6. `GET /api/tm/overtime-schedules` (`T550A` rows with non-empty `SOBEG`/`SOEND` mapped via `ZMODN` to `SCHKZ`).
+     7. `GET /api/tm/modifier-schedules` (`T550P.PAMOD` joined to `T550A` via `MOTPR`, then resolved `TPROG -> ZMODN -> SCHKZ`).
+     8. `GET /api/tm/attendance-absence-types` (`T554S` grouped by `ART01` `'A'`/`'P'`, custom starting with `Z`, `Y`, `9` vs standard).
+     9. `GET /api/tm/unused-absence-types` (`T554S` `ART01='A'` absent from active `PA2001` within last 24 months).
+     10. `GET /api/tm/unused-attendance-types` (`T554S` `ART01='P'` absent from active `PA2002` within last 24 months).
+   - Added append-only migration `012_tm.sql` creating `tm_t508a`, `tm_t550a`, `tm_t551a`, `tm_t550p`, `tm_t554s`, `tm_pa2001`, `tm_pa2002`.
+   - Built 8 standard module files in `src/modules/tm/` and registered `/api/tm` in `src/modules/index.js`.
+   - Extended `mock/mockData.js` with `tm_*` datasets and added 15 processor unit tests in `tests/unit.test.js` (56/56 pass).
+
+### 4.7 Header Module (`RFC_GET_SYSTEM_INFO`)
+   - Implemented standalone `header` module in `src/modules/header/` mounted at `/api/header`.
+   - Uses `sapFunctionCall("RFC_GET_SYSTEM_INFO", { DESTINATION: "" })` via MCP `sap_function_call`, extracts `RFCSI_EXPORT` (`RFCSYSID`, `RFCOPSYS`, `RFCDBSYS`, `RFCDEST`), stages in `hdr_system_info` (`013_header.sql`), and returns `{ systemName, operatingSystem, databaseSystem, logicalDestination }` via `GET /api/header/system-info` (and `/api/header`).
+   - Added `sap_function_call` support (`MOCK_FUNCTIONS.RFC_GET_SYSTEM_INFO`) to `mock/mockData.js` and `mock/mockMcpServer.js`, 3 unit tests in `tests/unit.test.js` (59/59 pass), and `tests/header.e2e.test.js`.
+
+### 4.8 OM `T777P` Language Field Correction (`LANGU`)
+   - Updated OM `T777P` integration to read `LANGU, PLVAR, PTEXT` and filter by `LANGU = 'E'` (replacing `SPRAS`) for `/api/om/objects-per-plan-version` and `/api/om/relationships-per-plan-version`.
+   - Added append-only migration `014_om_t777p_langu.sql` renaming `om_t777p.spras` to `langu` and updated `om.constants.js`, `om.repository.js`, `mock/mockData.js`, `tests/om.e2e.test.js`, `README.md`, and docs.
+
 ## 5. Bugs, errors and issues encountered, and resolutions
 
 | # | Issue | Resolution |

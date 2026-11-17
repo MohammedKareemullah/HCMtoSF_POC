@@ -114,13 +114,14 @@ export function buildCompanyFeaturesSummary(input) {
 }
 
 /**
- * 6. Feature Functions: unique features, function count, and function names list.
+ * 6. Feature Functions: unique features, feature name (TITLE), function count, and function names list.
  * Drops the number after the function name separated by space.
  */
 export function buildFeatureFunctions(rows) {
   if (rows && rows.length > 0 && Array.isArray(rows[0].functions)) {
     const items = rows.map((r) => ({
       feature: r.namen,
+      featureName: r.feature_name ?? r.featureName ?? "NA",
       noOfFunctions: r.no_of_functions ?? r.functions.length,
       functions: r.functions,
     }));
@@ -139,7 +140,7 @@ export function buildFeatureFunctions(rows) {
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([feature, funcs]) => {
       const arr = [...funcs].sort();
-      return { feature, noOfFunctions: arr.length, functions: arr };
+      return { feature, featureName: "NA", noOfFunctions: arr.length, functions: arr };
     });
   return { total: items.length, items };
 }

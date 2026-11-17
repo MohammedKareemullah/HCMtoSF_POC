@@ -210,9 +210,9 @@ const om_hrp1001 = [
 ];
 
 const om_t777p = [
-  { SPRAS: "E", PLVAR: "01", PTEXT: "Current plan" },
-  { SPRAS: "E", PLVAR: "02", PTEXT: "Version 02" },
-  { SPRAS: "D", PLVAR: "01", PTEXT: "Aktueller Plan" },
+  { LANGU: "E", PLVAR: "01", PTEXT: "Current plan" },
+  { LANGU: "E", PLVAR: "02", PTEXT: "Version 02" },
+  { LANGU: "D", PLVAR: "01", PTEXT: "Aktueller Plan" },
 ];
 
 const om_t77pq = [
@@ -276,6 +276,13 @@ const pe_t549d = [
   { NAMEN: "TARIF", FUNID: "P", FUNCT: "CHECK 10" },
   { NAMEN: "NUMKR", FUNID: "P", FUNCT: "NUMGEN 01" },
   { NAMEN: "LGMST", FUNID: "D", FUNCT: "IGNORE 01" },
+];
+
+const pe_t549bt = [
+  { FEATURE_LANGUAGE: "E", FEATURE: "TARIF", TITLE: "Pay Scale Group/Level Default" },
+  { FEATURE_LANGUAGE: "E", FEATURE: "NUMKR", TITLE: "Number Range Intervals" },
+  { FEATURE_LANGUAGE: "E", FEATURE: "LGMST", TITLE: "Planned Remuneration Default" },
+  { FEATURE_LANGUAGE: "D", FEATURE: "TARIF", TITLE: "Tarifmerkmal" },
 ];
 
 const pe_t512w = [
@@ -405,6 +412,68 @@ const pe_t549t = [
   { ABKRS: "Y1", ATEXT: "Special Payroll" },
 ];
 
+
+// ---------------------------------------------------------------------------
+// TM (Time Management) mock data
+// ---------------------------------------------------------------------------
+
+// T508A: Work schedule rule (SCHKZ) to Period work schedule (ZMODN) mapping
+const tm_t508a = [
+  { SCHKZ: "FLEX", ZMODN: "FLEX01" },
+  { SCHKZ: "FLEX", ZMODN: "FLEX02" },
+  { SCHKZ: "STD", ZMODN: "STD01" },
+  { SCHKZ: "ZSHIFT", ZMODN: "ZSHIFT01" },
+];
+
+// T550A: Daily work schedules with break/overtime/modifier data
+const tm_t550a = [
+  { TPROG: "STD8", BTBEG: "", BTEND: "", ETBEG: "", ETEND: "", SOBEG: "", SOEND: "", MOTPR: "M01" },
+  { TPROG: "BRKS", BTBEG: "120000", BTEND: "130000", ETBEG: "", ETEND: "", SOBEG: "", SOEND: "", MOTPR: "" },
+  { TPROG: "OVTM", BTBEG: "", BTEND: "", ETBEG: "", ETEND: "", SOBEG: "170000", SOEND: "190000", MOTPR: "" },
+  { TPROG: "MODF", BTBEG: "", BTEND: "", ETBEG: "", ETEND: "", SOBEG: "", SOEND: "", MOTPR: "M02" },
+];
+
+// T551A: Period work schedules with their daily work schedule slots (TPRG1-7)
+const tm_t551a = [
+  { ZMODN: "FLEX01", TPRG1: "STD8", TPRG2: "BRKS", TPRG3: "", TPRG4: "", TPRG5: "", TPRG6: "", TPRG7: "" },
+  { ZMODN: "FLEX02", TPRG1: "OVTM", TPRG2: "", TPRG3: "", TPRG4: "", TPRG5: "", TPRG6: "", TPRG7: "" },
+  { ZMODN: "STD01", TPRG1: "STD8", TPRG2: "", TPRG3: "", TPRG4: "", TPRG5: "", TPRG6: "", TPRG7: "" },
+  { ZMODN: "ZSHIFT01", TPRG1: "MODF", TPRG2: "", TPRG3: "", TPRG4: "", TPRG5: "", TPRG6: "", TPRG7: "" },
+];
+
+// T550P: Work schedule modifiers linking MOTPR to PAMOD
+const tm_t550p = [
+  { MOTPR: "M02", PAMOD: "MODIFIER_X" },
+];
+
+// T554S: Attendance (ART01='P') and absence (ART01='A') subtypes
+const tm_t554s = [
+  { SUBTY: "0100", ART01: "A" },  // std absence
+  { SUBTY: "0200", ART01: "A" },  // std absence (unused — not in PA2001)
+  { SUBTY: "Z001", ART01: "A" },  // custom absence (unused — not in PA2001)
+  { SUBTY: "0300", ART01: "P" },  // std attendance
+  { SUBTY: "Y001", ART01: "P" },  // custom attendance (unused — not in PA2002)
+];
+
+// T554T: Attendance/Absence type texts (AWART -> ATEXT)
+const tm_t554t = [
+  { AWART: "0100", ATEXT: "Annual Leave" },
+  { AWART: "0200", ATEXT: "Sick Leave" },
+  { AWART: "Z001", ATEXT: "Custom Sabbatical" },
+  { AWART: "0300", ATEXT: "Business Trip" },
+  { AWART: "Y001", ATEXT: "Custom Training" },
+];
+
+// PA2001: Active absence records (BEGDA <= today, ENDDA open — 0100 is active, 0200/Z001 are not)
+const tm_pa2001 = [
+  { SUBTY: "0100", BEGDA: "20240101", ENDDA: "99991231" },
+];
+
+// PA2002: Active attendance records (BEGDA <= today, ENDDA open — 0300 is active, Y001 is not)
+const tm_pa2002 = [
+  { SUBTY: "0300", BEGDA: "20240101", ENDDA: "99991231" },
+];
+
 export const MOCK_TABLES = {
   PA0000: pa0000, PA0001: pa0001, T500P: t500p, T001: t001, HRPY_RGDIR: hrpy,
   T582A: pa_t582a, T777D: t777d, T591A: t591a, T582S: t582s,
@@ -422,4 +491,19 @@ export const MOCK_TABLES = {
   T52A0_T: pe_t52a0,
   T599B: pe_t599b,
   T549T: pe_t549t,
+  T549BT: pe_t549bt,
+  T508A: tm_t508a, T550A: tm_t550a, T551A: tm_t551a,
+  T550P: tm_t550p, T554S: tm_t554s, T554T: tm_t554t,
+  PA2001: tm_pa2001, PA2002: tm_pa2002,
+};
+
+export const MOCK_FUNCTIONS = {
+  RFC_GET_SYSTEM_INFO: {
+    RFCSI_EXPORT: {
+      RFCSYSID: "S4H",
+      RFCOPSYS: "Linux",
+      RFCDBSYS: "HDB",
+      RFCDEST: "S4HCLNT100",
+    },
+  },
 };
